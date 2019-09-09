@@ -1,6 +1,5 @@
 module Layer exposing
     ( Layer
-    , addColorStop
     , getColorGradient
     , getGrid
     , getHeight
@@ -9,19 +8,19 @@ module Layer exposing
     , getName
     , getWidth
     , init
-    , removeColorStopAt
     , resizeGrid
     , setAtGridCoordinate
+    , setColorGradient
     , setMax
     , setMin
     , setName
     )
 
 import Color exposing (Color)
-import ColorGradient
+import DiscreteGradient
     exposing
-        ( ColorGradient
-        , ColorStop
+        ( ColorStop
+        , DiscreteGradient
         , addStop
         , getColorAt
         , getStops
@@ -51,7 +50,7 @@ type alias InnerLayer =
     , min : Int
     , max : Int
     , grid : Grid Int
-    , colorGradient : ColorGradient
+    , colorGradient : DiscreteGradient
     }
 
 
@@ -63,7 +62,7 @@ init name width height minVal maxVal =
         , height = max height 1
         , min = minVal
         , max = maxVal
-        , colorGradient = ColorGradient.init { value = minVal, color = defaultColor }
+        , colorGradient = DiscreteGradient.init { value = minVal, color = defaultColor }
         , grid = Grid.repeat width height minVal
         }
 
@@ -93,7 +92,7 @@ getHeight (Layer inner) =
     inner.height
 
 
-getColorGradient : Layer -> ColorGradient
+getColorGradient : Layer -> DiscreteGradient
 getColorGradient (Layer inner) =
     inner.colorGradient
 
@@ -132,6 +131,20 @@ setMax newMax (Layer inner) =
         Layer (setIncreasedMax newMax inner)
 
 
+setColorGradient : DiscreteGradient -> Layer -> Layer
+setColorGradient dg (Layer inner) =
+    let
+        newGradient =
+            dg
+                |> applyFloorToColorStops inner.min
+                |> applyCeilingToColorStops inner.max
+    in
+    Layer
+        { inner
+            | colorGradient = newGradient
+        }
+
+
 resizeGrid : Int -> Int -> Layer -> Layer
 resizeGrid width height (Layer inner) =
     if width < 1 || height < 1 || (width == inner.width && height == inner.height) then
@@ -156,33 +169,13 @@ setAtGridCoordinate coord value (Layer inner) =
         Layer inner
 
 
-addColorStop : ColorStop -> Layer -> Layer
-addColorStop stop (Layer inner) =
-    if stop.value >= inner.min && stop.value <= inner.max then
-        Layer
-            { inner
-                | colorGradient = addStop stop inner.colorGradient
-            }
 
-    else
-        Layer inner
-
-
-removeColorStopAt : Int -> Layer -> Layer
-removeColorStopAt value (Layer inner) =
-    Layer
-        { inner
-            | colorGradient = removeStopAt value inner.colorGradient
-        }
-
-
-
--- UNEXPOSED
+-- HELPERS
 
 
 defaultColor : Color
 defaultColor =
-    Color.lightGray
+    Color.blue
 
 
 unsafeResizeGrid : Int -> Int -> a -> Grid a -> Grid a
@@ -231,7 +224,7 @@ setDecreasedMax newMax inner =
 {-| Remove all color stops with values below the floor and create a color stop
 at the floor so that gradient colors above the floor are preserved.
 -}
-applyFloorToColorStops : Int -> ColorGradient -> ColorGradient
+applyFloorToColorStops : Int -> DiscreteGradient -> DiscreteGradient
 applyFloorToColorStops flr gradient =
     let
         colorAtFloor =
@@ -248,7 +241,7 @@ applyFloorToColorStops flr gradient =
 {-| Remove all color stops with values above the ceiling and create a color stop
 at the ceiling so that gradient colors below the ceiling are preserved.
 -}
-applyCeilingToColorStops : Int -> ColorGradient -> ColorGradient
+applyCeilingToColorStops : Int -> DiscreteGradient -> DiscreteGradient
 applyCeilingToColorStops ceil gradient =
     let
         colorAtCeiling =
@@ -264,7 +257,7 @@ applyCeilingToColorStops ceil gradient =
 
 {-| Remove the color stops from gradient.
 -}
-removeColorStops : List ColorStop -> ColorGradient -> ColorGradient
+removeColorStops : List ColorStop -> DiscreteGradient -> DiscreteGradient
 removeColorStops stops gradient =
     stops
         -- Map to list of stop values.

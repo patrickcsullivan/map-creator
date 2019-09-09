@@ -1,7 +1,10 @@
 module View exposing (view)
 
+import Color exposing (toCssString)
+import DiscreteGradient exposing (DiscreteGradient)
+import DiscreteGradientEditor
 import Html exposing (Html, button, div, input, text)
-import Html.Attributes exposing (class, value)
+import Html.Attributes exposing (class, classList, disabled, style, value)
 import Html.Events exposing (onClick, onInput)
 import Json.Decode as Decode
 import Layer exposing (Layer)
@@ -13,19 +16,30 @@ import Update exposing (Msg(..), toSelectLayerMsg, toSetLayerMaxMsg, toSetLayerM
 view : Model -> Html Msg
 view model =
     let
-        modal =
-            model
-                |> Model.getModal
-                |> Maybe.map modalContent
-                |> Maybe.map modalAndMask
-                |> toList
+        content =
+            [ toolbar model ] ++ (modalView <| Model.getModal model)
     in
     div [ class "page" ]
-        ([ toolbar model ] ++ modal)
+        content
 
 
 
 -- MODAL
+
+
+modalView : Maybe Modal -> List (Html Msg)
+modalView modal =
+    case modal of
+        Just m ->
+            [ div [ class "mask" ]
+                [ div [ class "modal" ]
+                    [ modalContent m
+                    ]
+                ]
+            ]
+
+        _ ->
+            []
 
 
 modalContent : Modal -> Html Msg
@@ -34,14 +48,8 @@ modalContent modal =
         Model.NewLayerDialog layerName ->
             newLayerDialog layerName
 
-
-modalAndMask : Html Msg -> Html Msg
-modalAndMask content =
-    div [ class "mask" ]
-        [ div [ class "modal" ]
-            [ content
-            ]
-        ]
+        Model.GradientEditorDialog state ->
+            gradientEditorDialog state
 
 
 newLayerDialog : String -> Html Msg
@@ -72,6 +80,12 @@ newLayerDialog layerName =
         ]
 
 
+gradientEditorDialog : DiscreteGradientEditor.State -> Html Msg
+gradientEditorDialog state =
+    DiscreteGradientEditor.view state
+        |> Html.map Update.GradientEditorMsg
+
+
 
 -- TOOLBAR
 
@@ -84,9 +98,10 @@ toolbar model =
     in
     div [ class "toolbar" ]
         [ toolbarSection
-            [ toolbarHeader "Layers"
+            [ toolbarHeader "Layer"
             , layerField layerIndex (Model.getLayers model)
             , minMaxField layer
+            , colorGradientField layer
             ]
         , toolbarSection
             [ toolbarHeader "Tools"
@@ -177,6 +192,100 @@ layerFieldNewButton =
 layerFieldDeleteButton : Html Msg
 layerFieldDeleteButton =
     button [ onClick DeleteSelectedLayer ] [ text "-" ]
+
+
+
+-- COLOR FIELD
+
+
+colorGradientField : Maybe Layer -> Html Msg
+colorGradientField layer =
+    div [ class "color-field" ]
+        [ colorFieldLabel
+        , colorGradientRow layer
+        ]
+
+
+colorFieldLabel : Html Msg
+colorFieldLabel =
+    div [ class "color-field__label" ]
+        [ text "Color"
+        ]
+
+
+colorGradientRow : Maybe Layer -> Html Msg
+colorGradientRow maybeLayer =
+    let
+        contents =
+            case maybeLayer of
+                Just layer ->
+                    [ enabledColorGradient
+                        (Layer.getColorGradient layer)
+                        (Layer.getMin layer)
+                        (Layer.getMax layer)
+                    , colorGradientEditButton False
+                    ]
+
+                Nothing ->
+                    [ disabledColorGradient
+                    , colorGradientEditButton True
+                    ]
+    in
+    div [ class "color-gradient__row" ]
+        contents
+
+
+enabledColorGradient : DiscreteGradient -> Int -> Int -> Html Msg
+enabledColorGradient gradient layerMin layerMax =
+    div
+        [ class "color-gradient"
+        ]
+        [ simpleGradient gradient layerMin layerMax
+        ]
+
+
+disabledColorGradient : Html Msg
+disabledColorGradient =
+    div
+        [ class "color-gradient"
+        , class "color-gradient_disabled"
+        ]
+        []
+
+
+colorGradientEditButton : Bool -> Html Msg
+colorGradientEditButton isDisabled =
+    button
+        [ disabled isDisabled
+        , onClick OpenGradientEditorDialog
+        ]
+        [ text "Edit"
+        ]
+
+
+simpleGradient : DiscreteGradient -> Int -> Int -> Html Msg
+simpleGradient gradient layerMin layerMax =
+    let
+        cells =
+            List.map (simpleGradientCell gradient) (List.range layerMin layerMax)
+    in
+    div [ class "simple-gradient" ]
+        [ div [ class "simple-gradient__row" ]
+            cells
+        ]
+
+
+simpleGradientCell : DiscreteGradient -> Int -> Html Msg
+simpleGradientCell gradient val =
+    let
+        color =
+            DiscreteGradient.getColorAt val gradient
+    in
+    div
+        [ class "simple-gradient__cell"
+        , style "background-color" (Color.toCssString color)
+        ]
+        []
 
 
 

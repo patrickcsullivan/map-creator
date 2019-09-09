@@ -6,6 +6,7 @@ module Update exposing
     , update
     )
 
+import DiscreteGradientEditor
 import Model exposing (Model)
 
 
@@ -18,6 +19,8 @@ type Msg
     | NewLayerDialogCreate
     | SetLayerMin (Maybe Int)
     | SetLayerMax (Maybe Int)
+    | OpenGradientEditorDialog
+    | GradientEditorMsg DiscreteGradientEditor.Msg
 
 
 update : Msg -> Model -> Model
@@ -63,6 +66,31 @@ update msg model =
                     Model.setSelectedLayerMax m model
 
                 Nothing ->
+                    model
+
+        OpenGradientEditorDialog ->
+            Model.openGradientEditorDialog model
+
+        GradientEditorMsg editorMsg ->
+            case Model.getModal model of
+                Just (Model.GradientEditorDialog state) ->
+                    let
+                        ( newState, output ) =
+                            DiscreteGradientEditor.update editorMsg state
+                    in
+                    case output of
+                        DiscreteGradientEditor.EditInProgress ->
+                            Model.setGradientEditorDialogState newState model
+
+                        DiscreteGradientEditor.Cancel ->
+                            Model.closeModal model
+
+                        DiscreteGradientEditor.Save gradient ->
+                            model
+                                |> Model.setSelectedLayerColorGradient gradient
+                                |> Model.closeModal
+
+                _ ->
                     model
     )
         |> Debug.log "Model"

@@ -12,14 +12,19 @@ module Model exposing
     , getSelectedLayerAndTool
     , getWidth
     , init
+    , openGradientEditorDialog
     , openNewLayerDialog
     , selectLayer
+    , setGradientEditorDialogState
     , setNewLayerDialogName
+    , setSelectedLayerColorGradient
     , setSelectedLayerMax
     , setSelectedLayerMin
     )
 
 import Brush exposing (Brush)
+import DiscreteGradient exposing (DiscreteGradient)
+import DiscreteGradientEditor
 import Layer exposing (Layer)
 import List.Extra exposing (getAt)
 
@@ -53,6 +58,7 @@ type Tool
 
 type Modal
     = NewLayerDialog String
+    | GradientEditorDialog DiscreteGradientEditor.State
 
 
 init : Model
@@ -111,6 +117,14 @@ getModal (Model inner) =
     inner.modal
 
 
+closeModal : Model -> Model
+closeModal (Model inner) =
+    Model
+        { inner
+            | modal = Nothing
+        }
+
+
 openNewLayerDialog : Model -> Model
 openNewLayerDialog (Model inner) =
     Model
@@ -132,12 +146,37 @@ setNewLayerDialogName layerName (Model inner) =
             Model inner
 
 
-closeModal : Model -> Model
-closeModal (Model inner) =
-    Model
-        { inner
-            | modal = Nothing
-        }
+openGradientEditorDialog : Model -> Model
+openGradientEditorDialog (Model inner) =
+    case getSelectedLayerAndTool (Model inner) of
+        Just ( _, layer, _ ) ->
+            let
+                editorState =
+                    DiscreteGradientEditor.init
+                        (Layer.getColorGradient layer)
+                        (Layer.getMin layer)
+                        (Layer.getMax layer)
+            in
+            Model
+                { inner
+                    | modal = Just (GradientEditorDialog editorState)
+                }
+
+        _ ->
+            Model inner
+
+
+setGradientEditorDialogState : DiscreteGradientEditor.State -> Model -> Model
+setGradientEditorDialogState state (Model inner) =
+    case inner.modal of
+        Just (GradientEditorDialog _) ->
+            Model
+                { inner
+                    | modal = Just (GradientEditorDialog state)
+                }
+
+        _ ->
+            Model inner
 
 
 
@@ -195,13 +234,18 @@ selectLayer index (Model inner) =
 
 
 setSelectedLayerMin : Int -> Model -> Model
-setSelectedLayerMin newMin =
-    updateSelectedLayer <| Layer.setMin newMin
+setSelectedLayerMin =
+    updateSelectedLayer << Layer.setMin
 
 
 setSelectedLayerMax : Int -> Model -> Model
-setSelectedLayerMax newMax =
-    updateSelectedLayer <| Layer.setMax newMax
+setSelectedLayerMax =
+    updateSelectedLayer << Layer.setMax
+
+
+setSelectedLayerColorGradient : DiscreteGradient -> Model -> Model
+setSelectedLayerColorGradient =
+    updateSelectedLayer << Layer.setColorGradient
 
 
 
