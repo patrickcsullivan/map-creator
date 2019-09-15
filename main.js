@@ -4347,12 +4347,6 @@ function _Browser_load(url)
 		}
 	}));
 }
-var author$project$Model$Model = function (a) {
-	return {$: 'Model', a: a};
-};
-var elm$core$Basics$identity = function (x) {
-	return x;
-};
 var elm$core$Maybe$Nothing = {$: 'Nothing'};
 var elm$core$Basics$EQ = {$: 'EQ'};
 var elm$core$Basics$LT = {$: 'LT'};
@@ -4434,8 +4428,7 @@ var elm$core$Set$toList = function (_n0) {
 	var dict = _n0.a;
 	return elm$core$Dict$keys(dict);
 };
-var author$project$Model$init = author$project$Model$Model(
-	{height: 10, layers: _List_Nil, modal: elm$core$Maybe$Nothing, name: 'untitled', selectedLayerIndexAndTool: elm$core$Maybe$Nothing, width: 10});
+var author$project$MapEditor$init = {height: 10, layers: _List_Nil, modal: elm$core$Maybe$Nothing, name: 'untitled', selectedLayerIndexAndTool: elm$core$Maybe$Nothing, width: 10};
 var author$project$DiscreteGradientEditor$State = function (a) {
 	return {$: 'State', a: a};
 };
@@ -4546,6 +4539,9 @@ var author$project$DiscreteGradient$stopsBelow = function (value) {
 		});
 };
 var elm$core$Basics$append = _Utils_append;
+var elm$core$Basics$identity = function (x) {
+	return x;
+};
 var author$project$DiscreteGradient$addStop = F2(
 	function (stop, _n0) {
 		var stops = _n0.a;
@@ -5522,12 +5518,10 @@ var author$project$DiscreteGradientEditor$update = F2(
 			author$project$DiscreteGradientEditor$State,
 			A2(author$project$DiscreteGradientEditor$update_, msg, model));
 	});
-var author$project$Model$closeModal = function (_n0) {
-	var inner = _n0.a;
-	return author$project$Model$Model(
-		_Utils_update(
-			inner,
-			{modal: elm$core$Maybe$Nothing}));
+var author$project$MapEditor$closeModal = function (state) {
+	return _Utils_update(
+		state,
+		{modal: elm$core$Maybe$Nothing});
 };
 var author$project$DiscreteGradient$init = function (stop) {
 	return author$project$DiscreteGradient$DiscreteGradient(
@@ -5710,19 +5704,17 @@ var author$project$Layer$init = F5(
 				width: A2(elm$core$Basics$max, width, 1)
 			});
 	});
-var author$project$Model$createLayer = F2(
-	function (name, _n0) {
-		var inner = _n0.a;
-		var newLayer = A5(author$project$Layer$init, name, inner.width, inner.height, 0, 0);
-		return author$project$Model$Model(
-			_Utils_update(
-				inner,
-				{
-					layers: _Utils_ap(
-						inner.layers,
-						_List_fromArray(
-							[newLayer]))
-				}));
+var author$project$MapEditor$createLayer = F2(
+	function (name, state) {
+		var newLayer = A5(author$project$Layer$init, name, state.width, state.height, 0, 0);
+		return _Utils_update(
+			state,
+			{
+				layers: _Utils_ap(
+					state.layers,
+					_List_fromArray(
+						[newLayer]))
+			});
 	});
 var elm$core$List$drop = F2(
 	function (n, list) {
@@ -5871,32 +5863,32 @@ var elm$core$List$take = F2(
 	function (n, list) {
 		return A3(elm$core$List$takeFast, 0, n, list);
 	});
-var author$project$Model$remove = F2(
+var author$project$MapEditor$remove = F2(
 	function (index, xs) {
 		return _Utils_ap(
 			A2(elm$core$List$take, index, xs),
 			A2(elm$core$List$drop, index + 1, xs));
 	});
-var author$project$Model$deleteSelectedLayer = function (_n0) {
-	var inner = _n0.a;
-	var _n1 = inner.selectedLayerIndexAndTool;
-	if (_n1.$ === 'Just') {
-		var _n2 = _n1.a;
-		var index = _n2.a;
-		return author$project$Model$Model(
-			_Utils_update(
-				inner,
-				{
-					layers: A2(author$project$Model$remove, index, inner.layers),
-					selectedLayerIndexAndTool: elm$core$Maybe$Nothing
-				}));
+var author$project$MapEditor$deleteSelectedLayer = function (state) {
+	var _n0 = state.selectedLayerIndexAndTool;
+	if (_n0.$ === 'Just') {
+		var _n1 = _n0.a;
+		var index = _n1.a;
+		return _Utils_update(
+			state,
+			{
+				layers: A2(author$project$MapEditor$remove, index, state.layers),
+				selectedLayerIndexAndTool: elm$core$Maybe$Nothing
+			});
 	} else {
-		return author$project$Model$Model(inner);
+		return state;
 	}
 };
-var author$project$Model$getModal = function (_n0) {
-	var inner = _n0.a;
-	return inner.modal;
+var author$project$MapEditor$getLayerCount = function (state) {
+	return elm$core$List$length(state.layers);
+};
+var author$project$MapEditor$getModal = function (state) {
+	return state.modal;
 };
 var author$project$DiscreteGradientEditor$initModel = F3(
 	function (dg, gradientMin, gradientMax) {
@@ -5926,7 +5918,7 @@ var author$project$Layer$getMin = function (_n0) {
 	var inner = _n0.a;
 	return inner.min;
 };
-var author$project$Model$GradientEditorDialog = function (a) {
+var author$project$MapEditor$GradientEditorDialog = function (a) {
 	return {$: 'GradientEditorDialog', a: a};
 };
 var elm_community$list_extra$List$Extra$getAt = F2(
@@ -5934,116 +5926,103 @@ var elm_community$list_extra$List$Extra$getAt = F2(
 		return (idx < 0) ? elm$core$Maybe$Nothing : elm$core$List$head(
 			A2(elm$core$List$drop, idx, xs));
 	});
-var author$project$Model$getSelectedLayerAndTool = function (_n0) {
-	var inner = _n0.a;
-	var _n1 = inner.selectedLayerIndexAndTool;
-	if (_n1.$ === 'Nothing') {
+var author$project$MapEditor$getSelectedLayerAndTool = function (state) {
+	var _n0 = state.selectedLayerIndexAndTool;
+	if (_n0.$ === 'Nothing') {
 		return elm$core$Maybe$Nothing;
 	} else {
-		var _n2 = _n1.a;
-		var layerIndex = _n2.a;
-		var tool = _n2.b;
-		var _n3 = A2(elm_community$list_extra$List$Extra$getAt, layerIndex, inner.layers);
-		if (_n3.$ === 'Nothing') {
+		var _n1 = _n0.a;
+		var layerIndex = _n1.a;
+		var tool = _n1.b;
+		var _n2 = A2(elm_community$list_extra$List$Extra$getAt, layerIndex, state.layers);
+		if (_n2.$ === 'Nothing') {
 			return elm$core$Maybe$Nothing;
 		} else {
-			var layer = _n3.a;
+			var layer = _n2.a;
 			return elm$core$Maybe$Just(
 				_Utils_Tuple3(layerIndex, layer, tool));
 		}
 	}
 };
-var author$project$Model$openGradientEditorDialog = function (_n0) {
-	var inner = _n0.a;
-	var _n1 = author$project$Model$getSelectedLayerAndTool(
-		author$project$Model$Model(inner));
-	if (_n1.$ === 'Just') {
-		var _n2 = _n1.a;
-		var layer = _n2.b;
+var author$project$MapEditor$openGradientEditorDialog = function (state) {
+	var _n0 = author$project$MapEditor$getSelectedLayerAndTool(state);
+	if (_n0.$ === 'Just') {
+		var _n1 = _n0.a;
+		var layer = _n1.b;
 		var editorState = A3(
 			author$project$DiscreteGradientEditor$init,
 			author$project$Layer$getColorGradient(layer),
 			author$project$Layer$getMin(layer),
 			author$project$Layer$getMax(layer));
-		return author$project$Model$Model(
-			_Utils_update(
-				inner,
-				{
-					modal: elm$core$Maybe$Just(
-						author$project$Model$GradientEditorDialog(editorState))
-				}));
-	} else {
-		return author$project$Model$Model(inner);
-	}
-};
-var author$project$Model$NewLayerDialog = function (a) {
-	return {$: 'NewLayerDialog', a: a};
-};
-var author$project$Model$openNewLayerDialog = function (_n0) {
-	var inner = _n0.a;
-	return author$project$Model$Model(
-		_Utils_update(
-			inner,
+		return _Utils_update(
+			state,
 			{
 				modal: elm$core$Maybe$Just(
-					author$project$Model$NewLayerDialog('New Layer'))
-			}));
+					author$project$MapEditor$GradientEditorDialog(editorState))
+			});
+	} else {
+		return state;
+	}
 };
-var author$project$Model$Pan = {$: 'Pan'};
-var author$project$Model$selectLayer = F2(
-	function (index, _n0) {
-		var inner = _n0.a;
+var author$project$MapEditor$NewLayerDialog = function (a) {
+	return {$: 'NewLayerDialog', a: a};
+};
+var author$project$MapEditor$openNewLayerDialog = function (state) {
+	return _Utils_update(
+		state,
+		{
+			modal: elm$core$Maybe$Just(
+				author$project$MapEditor$NewLayerDialog('New Layer'))
+		});
+};
+var author$project$MapEditor$Pan = {$: 'Pan'};
+var author$project$MapEditor$selectLayer = F2(
+	function (index, state) {
 		if (index.$ === 'Nothing') {
-			return author$project$Model$Model(
-				_Utils_update(
-					inner,
-					{selectedLayerIndexAndTool: elm$core$Maybe$Nothing}));
+			return _Utils_update(
+				state,
+				{selectedLayerIndexAndTool: elm$core$Maybe$Nothing});
 		} else {
 			var i = index.a;
-			var _n2 = A2(elm_community$list_extra$List$Extra$getAt, i, inner.layers);
-			if (_n2.$ === 'Nothing') {
-				return author$project$Model$Model(inner);
+			var _n1 = A2(elm_community$list_extra$List$Extra$getAt, i, state.layers);
+			if (_n1.$ === 'Nothing') {
+				return state;
 			} else {
-				return author$project$Model$Model(
-					_Utils_update(
-						inner,
-						{
-							selectedLayerIndexAndTool: elm$core$Maybe$Just(
-								_Utils_Tuple2(i, author$project$Model$Pan))
-						}));
+				return _Utils_update(
+					state,
+					{
+						selectedLayerIndexAndTool: elm$core$Maybe$Just(
+							_Utils_Tuple2(i, author$project$MapEditor$Pan))
+					});
 			}
 		}
 	});
-var author$project$Model$setGradientEditorDialogState = F2(
-	function (state, _n0) {
-		var inner = _n0.a;
-		var _n1 = inner.modal;
-		if ((_n1.$ === 'Just') && (_n1.a.$ === 'GradientEditorDialog')) {
-			return author$project$Model$Model(
-				_Utils_update(
-					inner,
-					{
-						modal: elm$core$Maybe$Just(
-							author$project$Model$GradientEditorDialog(state))
-					}));
+var author$project$MapEditor$setNewLayerDialogName = F2(
+	function (layerName, state) {
+		var _n0 = state.modal;
+		if ((_n0.$ === 'Just') && (_n0.a.$ === 'NewLayerDialog')) {
+			return _Utils_update(
+				state,
+				{
+					modal: elm$core$Maybe$Just(
+						author$project$MapEditor$NewLayerDialog(layerName))
+				});
 		} else {
-			return author$project$Model$Model(inner);
+			return state;
 		}
 	});
-var author$project$Model$setNewLayerDialogName = F2(
-	function (layerName, _n0) {
-		var inner = _n0.a;
-		var _n1 = inner.modal;
-		if ((_n1.$ === 'Just') && (_n1.a.$ === 'NewLayerDialog')) {
-			return author$project$Model$Model(
-				_Utils_update(
-					inner,
-					{
-						modal: elm$core$Maybe$Just(
-							author$project$Model$NewLayerDialog(layerName))
-					}));
+var author$project$MapEditor$updateGradientEditorDialog = F2(
+	function (dialog, state) {
+		var _n0 = state.modal;
+		if ((_n0.$ === 'Just') && (_n0.a.$ === 'GradientEditorDialog')) {
+			return _Utils_update(
+				state,
+				{
+					modal: elm$core$Maybe$Just(
+						author$project$MapEditor$GradientEditorDialog(dialog))
+				});
 		} else {
-			return author$project$Model$Model(inner);
+			return state;
 		}
 	});
 var author$project$Layer$removeColorStops = F2(
@@ -6135,34 +6114,32 @@ var elm$core$List$indexedMap = F2(
 				elm$core$List$length(xs) - 1),
 			xs);
 	});
-var author$project$Model$updateSelectedLayer = F2(
-	function (f, _n0) {
-		var inner = _n0.a;
-		var _n1 = inner.selectedLayerIndexAndTool;
-		if (_n1.$ === 'Just') {
-			var _n2 = _n1.a;
-			var selectedIndex = _n2.a;
-			var _n3 = A2(elm_community$list_extra$List$Extra$getAt, selectedIndex, inner.layers);
-			if (_n3.$ === 'Just') {
+var author$project$MapEditor$updateSelectedLayer = F2(
+	function (f, state) {
+		var _n0 = state.selectedLayerIndexAndTool;
+		if (_n0.$ === 'Just') {
+			var _n1 = _n0.a;
+			var selectedIndex = _n1.a;
+			var _n2 = A2(elm_community$list_extra$List$Extra$getAt, selectedIndex, state.layers);
+			if (_n2.$ === 'Just') {
 				var updatedLayers = A2(
 					elm$core$List$indexedMap,
 					F2(
 						function (i, layer) {
 							return _Utils_eq(i, selectedIndex) ? f(layer) : layer;
 						}),
-					inner.layers);
-				return author$project$Model$Model(
-					_Utils_update(
-						inner,
-						{layers: updatedLayers}));
+					state.layers);
+				return _Utils_update(
+					state,
+					{layers: updatedLayers});
 			} else {
-				return author$project$Model$Model(inner);
+				return state;
 			}
 		} else {
-			return author$project$Model$Model(inner);
+			return state;
 		}
 	});
-var author$project$Model$setSelectedLayerColorGradient = A2(elm$core$Basics$composeL, author$project$Model$updateSelectedLayer, author$project$Layer$setColorGradient);
+var author$project$MapEditor$updateSelectedLayerColorGradient = A2(elm$core$Basics$composeL, author$project$MapEditor$updateSelectedLayer, author$project$Layer$setColorGradient);
 var elm$core$Elm$JsArray$map = _JsArray_map;
 var elm$core$Array$map = F2(
 	function (func, _n0) {
@@ -6223,7 +6200,7 @@ var author$project$Layer$setMax = F2(
 			A2(author$project$Layer$setDecreasedMax, newMax, inner)) : author$project$Layer$Layer(
 			A2(author$project$Layer$setIncreasedMax, newMax, inner)));
 	});
-var author$project$Model$setSelectedLayerMax = A2(elm$core$Basics$composeL, author$project$Model$updateSelectedLayer, author$project$Layer$setMax);
+var author$project$MapEditor$updateSelectedLayerMax = A2(elm$core$Basics$composeL, author$project$MapEditor$updateSelectedLayer, author$project$Layer$setMax);
 var author$project$Layer$setDecreasedMin = F2(
 	function (newMin, inner) {
 		return _Utils_update(
@@ -6251,87 +6228,79 @@ var author$project$Layer$setMin = F2(
 			A2(author$project$Layer$setDecreasedMin, newMin, inner)) : author$project$Layer$Layer(
 			A2(author$project$Layer$setIncreasedMin, newMin, inner)));
 	});
-var author$project$Model$setSelectedLayerMin = A2(elm$core$Basics$composeL, author$project$Model$updateSelectedLayer, author$project$Layer$setMin);
-var author$project$Model$getLayers = function (_n0) {
-	var inner = _n0.a;
-	return inner.layers;
-};
-var author$project$Update$getLayerCount = function (model) {
-	return elm$core$List$length(
-		author$project$Model$getLayers(model));
-};
+var author$project$MapEditor$updateSelectedLayerMin = A2(elm$core$Basics$composeL, author$project$MapEditor$updateSelectedLayer, author$project$Layer$setMin);
 var elm$core$Debug$log = _Debug_log;
-var author$project$Update$update = F2(
-	function (msg, model) {
+var author$project$MapEditor$update = F2(
+	function (msg, state) {
 		return A2(
 			elm$core$Debug$log,
-			'Model',
+			'State',
 			function () {
 				var _n0 = A2(elm$core$Debug$log, 'msg', msg);
 				switch (_n0.$) {
 					case 'SelectLayer':
 						var index = _n0.a;
-						return A2(author$project$Model$selectLayer, index, model);
+						return A2(author$project$MapEditor$selectLayer, index, state);
 					case 'DeleteSelectedLayer':
-						return author$project$Model$deleteSelectedLayer(model);
+						return author$project$MapEditor$deleteSelectedLayer(state);
 					case 'OpenNewLayerDialog':
-						return author$project$Model$openNewLayerDialog(model);
+						return author$project$MapEditor$openNewLayerDialog(state);
 					case 'SetNewLayerDialogNameField':
 						var layerName = _n0.a;
-						return A2(author$project$Model$setNewLayerDialogName, layerName, model);
+						return A2(author$project$MapEditor$setNewLayerDialogName, layerName, state);
 					case 'NewLayerDialogCancel':
-						return author$project$Model$closeModal(model);
+						return author$project$MapEditor$closeModal(state);
 					case 'NewLayerDialogCreate':
-						var _n1 = author$project$Model$getModal(model);
+						var _n1 = author$project$MapEditor$getModal(state);
 						if ((_n1.$ === 'Just') && (_n1.a.$ === 'NewLayerDialog')) {
 							var layerName = _n1.a.a;
-							return author$project$Model$closeModal(
+							return author$project$MapEditor$closeModal(
 								A2(
-									author$project$Model$selectLayer,
+									author$project$MapEditor$selectLayer,
 									elm$core$Maybe$Just(
-										author$project$Update$getLayerCount(model)),
-									A2(author$project$Model$createLayer, layerName, model)));
+										author$project$MapEditor$getLayerCount(state)),
+									A2(author$project$MapEditor$createLayer, layerName, state)));
 						} else {
-							return model;
+							return state;
 						}
 					case 'SetLayerMin':
 						var newMin = _n0.a;
 						if (newMin.$ === 'Just') {
 							var m = newMin.a;
-							return A2(author$project$Model$setSelectedLayerMin, m, model);
+							return A2(author$project$MapEditor$updateSelectedLayerMin, m, state);
 						} else {
-							return model;
+							return state;
 						}
 					case 'SetLayerMax':
 						var newMax = _n0.a;
 						if (newMax.$ === 'Just') {
 							var m = newMax.a;
-							return A2(author$project$Model$setSelectedLayerMax, m, model);
+							return A2(author$project$MapEditor$updateSelectedLayerMax, m, state);
 						} else {
-							return model;
+							return state;
 						}
 					case 'OpenGradientEditorDialog':
-						return author$project$Model$openGradientEditorDialog(model);
+						return author$project$MapEditor$openGradientEditorDialog(state);
 					default:
 						var editorMsg = _n0.a;
-						var _n4 = author$project$Model$getModal(model);
+						var _n4 = author$project$MapEditor$getModal(state);
 						if ((_n4.$ === 'Just') && (_n4.a.$ === 'GradientEditorDialog')) {
-							var state = _n4.a.a;
-							var _n5 = A2(author$project$DiscreteGradientEditor$update, editorMsg, state);
-							var newState = _n5.a;
+							var dialog = _n4.a.a;
+							var _n5 = A2(author$project$DiscreteGradientEditor$update, editorMsg, dialog);
+							var newDialog = _n5.a;
 							var output = _n5.b;
 							switch (output.$) {
 								case 'EditInProgress':
-									return A2(author$project$Model$setGradientEditorDialogState, newState, model);
+									return A2(author$project$MapEditor$updateGradientEditorDialog, newDialog, state);
 								case 'Cancel':
-									return author$project$Model$closeModal(model);
+									return author$project$MapEditor$closeModal(state);
 								default:
 									var gradient = output.a;
-									return author$project$Model$closeModal(
-										A2(author$project$Model$setSelectedLayerColorGradient, gradient, model));
+									return author$project$MapEditor$closeModal(
+										A2(author$project$MapEditor$updateSelectedLayerColorGradient, gradient, state));
 							}
 						} else {
-							return model;
+							return state;
 						}
 				}
 			}());
@@ -7744,27 +7713,21 @@ var author$project$DiscreteGradientEditor$view = function (_n0) {
 					]))
 			]));
 };
-var author$project$Update$GradientEditorMsg = function (a) {
+var author$project$MapEditor$GradientEditorMsg = function (a) {
 	return {$: 'GradientEditorMsg', a: a};
 };
-var author$project$View$gradientEditorDialog = function (state) {
+var author$project$MapEditor$gradientEditorDialog = function (state) {
 	return A2(
 		elm$html$Html$map,
-		author$project$Update$GradientEditorMsg,
+		author$project$MapEditor$GradientEditorMsg,
 		author$project$DiscreteGradientEditor$view(state));
 };
-var author$project$Update$NewLayerDialogCancel = {$: 'NewLayerDialogCancel'};
-var author$project$Update$NewLayerDialogCreate = {$: 'NewLayerDialogCreate'};
-var author$project$Update$SetNewLayerDialogNameField = function (a) {
+var author$project$MapEditor$NewLayerDialogCancel = {$: 'NewLayerDialogCancel'};
+var author$project$MapEditor$NewLayerDialogCreate = {$: 'NewLayerDialogCreate'};
+var author$project$MapEditor$SetNewLayerDialogNameField = function (a) {
 	return {$: 'SetNewLayerDialogNameField', a: a};
 };
-var author$project$View$onClick = function (message) {
-	return A2(
-		elm$html$Html$Events$on,
-		'click',
-		elm$json$Json$Decode$succeed(message));
-};
-var author$project$View$newLayerDialog = function (layerName) {
+var author$project$MapEditor$newLayerDialog = function (layerName) {
 	return A2(
 		elm$html$Html$div,
 		_List_fromArray(
@@ -7807,7 +7770,7 @@ var author$project$View$newLayerDialog = function (layerName) {
 							[
 								elm$html$Html$Attributes$class('new-layer-dialog__name-label'),
 								elm$html$Html$Attributes$value(layerName),
-								elm$html$Html$Events$onInput(author$project$Update$SetNewLayerDialogNameField)
+								elm$html$Html$Events$onInput(author$project$MapEditor$SetNewLayerDialogNameField)
 							]),
 						_List_Nil)
 					])),
@@ -7824,7 +7787,7 @@ var author$project$View$newLayerDialog = function (layerName) {
 						_List_fromArray(
 							[
 								elm$html$Html$Attributes$class('new-layer-dialog__button'),
-								author$project$View$onClick(author$project$Update$NewLayerDialogCancel)
+								elm$html$Html$Events$onClick(author$project$MapEditor$NewLayerDialogCancel)
 							]),
 						_List_fromArray(
 							[
@@ -7835,7 +7798,7 @@ var author$project$View$newLayerDialog = function (layerName) {
 						_List_fromArray(
 							[
 								elm$html$Html$Attributes$class('new-layer-dialog__button'),
-								author$project$View$onClick(author$project$Update$NewLayerDialogCreate)
+								elm$html$Html$Events$onClick(author$project$MapEditor$NewLayerDialogCreate)
 							]),
 						_List_fromArray(
 							[
@@ -7844,16 +7807,16 @@ var author$project$View$newLayerDialog = function (layerName) {
 					]))
 			]));
 };
-var author$project$View$modalContent = function (modal) {
+var author$project$MapEditor$modalContent = function (modal) {
 	if (modal.$ === 'NewLayerDialog') {
 		var layerName = modal.a;
-		return author$project$View$newLayerDialog(layerName);
+		return author$project$MapEditor$newLayerDialog(layerName);
 	} else {
 		var state = modal.a;
-		return author$project$View$gradientEditorDialog(state);
+		return author$project$MapEditor$gradientEditorDialog(state);
 	}
 };
-var author$project$View$modalView = function (modal) {
+var author$project$MapEditor$modalView = function (modal) {
 	if (modal.$ === 'Just') {
 		var m = modal.a;
 		return _List_fromArray(
@@ -7874,7 +7837,7 @@ var author$project$View$modalView = function (modal) {
 							]),
 						_List_fromArray(
 							[
-								author$project$View$modalContent(m)
+								author$project$MapEditor$modalContent(m)
 							]))
 					]))
 			]);
@@ -7882,7 +7845,7 @@ var author$project$View$modalView = function (modal) {
 		return _List_Nil;
 	}
 };
-var author$project$View$colorFieldLabel = A2(
+var author$project$MapEditor$colorFieldLabel = A2(
 	elm$html$Html$div,
 	_List_fromArray(
 		[
@@ -7892,21 +7855,21 @@ var author$project$View$colorFieldLabel = A2(
 		[
 			elm$html$Html$text('Color')
 		]));
-var author$project$Update$OpenGradientEditorDialog = {$: 'OpenGradientEditorDialog'};
-var author$project$View$colorGradientEditButton = function (isDisabled) {
+var author$project$MapEditor$OpenGradientEditorDialog = {$: 'OpenGradientEditorDialog'};
+var author$project$MapEditor$colorGradientEditButton = function (isDisabled) {
 	return A2(
 		elm$html$Html$button,
 		_List_fromArray(
 			[
 				elm$html$Html$Attributes$disabled(isDisabled),
-				author$project$View$onClick(author$project$Update$OpenGradientEditorDialog)
+				elm$html$Html$Events$onClick(author$project$MapEditor$OpenGradientEditorDialog)
 			]),
 		_List_fromArray(
 			[
 				elm$html$Html$text('Edit')
 			]));
 };
-var author$project$View$disabledColorGradient = A2(
+var author$project$MapEditor$disabledColorGradient = A2(
 	elm$html$Html$div,
 	_List_fromArray(
 		[
@@ -7914,7 +7877,7 @@ var author$project$View$disabledColorGradient = A2(
 			elm$html$Html$Attributes$class('color-gradient_disabled')
 		]),
 	_List_Nil);
-var author$project$View$simpleGradientCell = F2(
+var author$project$MapEditor$simpleGradientCell = F2(
 	function (gradient, val) {
 		var color = A2(author$project$DiscreteGradient$getColorAt, val, gradient);
 		return A2(
@@ -7929,11 +7892,11 @@ var author$project$View$simpleGradientCell = F2(
 				]),
 			_List_Nil);
 	});
-var author$project$View$simpleGradient = F3(
+var author$project$MapEditor$simpleGradient = F3(
 	function (gradient, layerMin, layerMax) {
 		var cells = A2(
 			elm$core$List$map,
-			author$project$View$simpleGradientCell(gradient),
+			author$project$MapEditor$simpleGradientCell(gradient),
 			A2(elm$core$List$range, layerMin, layerMax));
 		return A2(
 			elm$html$Html$div,
@@ -7952,7 +7915,7 @@ var author$project$View$simpleGradient = F3(
 					cells)
 				]));
 	});
-var author$project$View$enabledColorGradient = F3(
+var author$project$MapEditor$enabledColorGradient = F3(
 	function (gradient, layerMin, layerMax) {
 		return A2(
 			elm$html$Html$div,
@@ -7962,27 +7925,27 @@ var author$project$View$enabledColorGradient = F3(
 				]),
 			_List_fromArray(
 				[
-					A3(author$project$View$simpleGradient, gradient, layerMin, layerMax)
+					A3(author$project$MapEditor$simpleGradient, gradient, layerMin, layerMax)
 				]));
 	});
-var author$project$View$colorGradientRow = function (maybeLayer) {
+var author$project$MapEditor$colorGradientRow = function (maybeLayer) {
 	var contents = function () {
 		if (maybeLayer.$ === 'Just') {
 			var layer = maybeLayer.a;
 			return _List_fromArray(
 				[
 					A3(
-					author$project$View$enabledColorGradient,
+					author$project$MapEditor$enabledColorGradient,
 					author$project$Layer$getColorGradient(layer),
 					author$project$Layer$getMin(layer),
 					author$project$Layer$getMax(layer)),
-					author$project$View$colorGradientEditButton(false)
+					author$project$MapEditor$colorGradientEditButton(false)
 				]);
 		} else {
 			return _List_fromArray(
 				[
-					author$project$View$disabledColorGradient,
-					author$project$View$colorGradientEditButton(true)
+					author$project$MapEditor$disabledColorGradient,
+					author$project$MapEditor$colorGradientEditButton(true)
 				]);
 		}
 	}();
@@ -7994,7 +7957,7 @@ var author$project$View$colorGradientRow = function (maybeLayer) {
 			]),
 		contents);
 };
-var author$project$View$colorGradientField = function (layer) {
+var author$project$MapEditor$colorGradientField = function (layer) {
 	return A2(
 		elm$html$Html$div,
 		_List_fromArray(
@@ -8003,39 +7966,35 @@ var author$project$View$colorGradientField = function (layer) {
 			]),
 		_List_fromArray(
 			[
-				author$project$View$colorFieldLabel,
-				author$project$View$colorGradientRow(layer)
+				author$project$MapEditor$colorFieldLabel,
+				author$project$MapEditor$colorGradientRow(layer)
 			]));
 };
-var author$project$Update$DeleteSelectedLayer = {$: 'DeleteSelectedLayer'};
-var author$project$View$layerFieldDeleteButton = A2(
+var author$project$MapEditor$DeleteSelectedLayer = {$: 'DeleteSelectedLayer'};
+var author$project$MapEditor$layerFieldDeleteButton = A2(
 	elm$html$Html$button,
 	_List_fromArray(
 		[
-			author$project$View$onClick(author$project$Update$DeleteSelectedLayer)
+			elm$html$Html$Events$onClick(author$project$MapEditor$DeleteSelectedLayer)
 		]),
 	_List_fromArray(
 		[
 			elm$html$Html$text('-')
 		]));
-var author$project$Update$OpenNewLayerDialog = {$: 'OpenNewLayerDialog'};
-var author$project$View$layerFieldNewButton = A2(
+var author$project$MapEditor$OpenNewLayerDialog = {$: 'OpenNewLayerDialog'};
+var author$project$MapEditor$layerFieldNewButton = A2(
 	elm$html$Html$button,
 	_List_fromArray(
 		[
-			author$project$View$onClick(author$project$Update$OpenNewLayerDialog)
+			elm$html$Html$Events$onClick(author$project$MapEditor$OpenNewLayerDialog)
 		]),
 	_List_fromArray(
 		[
 			elm$html$Html$text('+')
 		]));
-var author$project$Update$SelectLayer = function (a) {
-	return {$: 'SelectLayer', a: a};
-};
-var author$project$Update$toSelectLayerMsg = A2(elm$core$Basics$composeL, author$project$Update$SelectLayer, elm$core$String$toInt);
 var elm$html$Html$option = _VirtualDom_node('option');
 var elm$html$Html$Attributes$selected = elm$html$Html$Attributes$boolProperty('selected');
-var author$project$View$layerFieldEmptyOption = function (isSelected) {
+var author$project$MapEditor$layerFieldEmptyOption = function (isSelected) {
 	return A2(
 		elm$html$Html$option,
 		_List_fromArray(
@@ -8048,7 +8007,7 @@ var author$project$View$layerFieldEmptyOption = function (isSelected) {
 				elm$html$Html$text('')
 			]));
 };
-var author$project$View$isJustEqual = F2(
+var author$project$MapEditor$isJustEqual = F2(
 	function (maybeX, y) {
 		if (maybeX.$ === 'Nothing') {
 			return false;
@@ -8061,7 +8020,7 @@ var author$project$Layer$getName = function (_n0) {
 	var inner = _n0.a;
 	return inner.name;
 };
-var author$project$View$layerFieldOption = F3(
+var author$project$MapEditor$layerFieldOption = F3(
 	function (index, layer, isSelected) {
 		return A2(
 			elm$html$Html$option,
@@ -8077,17 +8036,21 @@ var author$project$View$layerFieldOption = F3(
 					author$project$Layer$getName(layer))
 				]));
 	});
-var author$project$View$layerFieldOptions = function (selectedIndex) {
+var author$project$MapEditor$layerFieldOptions = function (selectedIndex) {
 	return elm$core$List$indexedMap(
 		F2(
 			function (i, layer) {
 				return A3(
-					author$project$View$layerFieldOption,
+					author$project$MapEditor$layerFieldOption,
 					i,
 					layer,
-					A2(author$project$View$isJustEqual, selectedIndex, i));
+					A2(author$project$MapEditor$isJustEqual, selectedIndex, i));
 			}));
 };
+var author$project$MapEditor$SelectLayer = function (a) {
+	return {$: 'SelectLayer', a: a};
+};
+var author$project$MapEditor$toSelectLayerMsg = A2(elm$core$Basics$composeL, author$project$MapEditor$SelectLayer, elm$core$String$toInt);
 var elm$html$Html$select = _VirtualDom_node('select');
 var elm_community$maybe_extra$Maybe$Extra$isNothing = function (m) {
 	if (m.$ === 'Nothing') {
@@ -8096,24 +8059,24 @@ var elm_community$maybe_extra$Maybe$Extra$isNothing = function (m) {
 		return false;
 	}
 };
-var author$project$View$layerFieldSelect = F2(
+var author$project$MapEditor$layerFieldSelect = F2(
 	function (selectedIndex, layers) {
-		var emptyOption = author$project$View$layerFieldEmptyOption(
+		var emptyOption = author$project$MapEditor$layerFieldEmptyOption(
 			elm_community$maybe_extra$Maybe$Extra$isNothing(selectedIndex));
 		var options = _Utils_ap(
 			_List_fromArray(
 				[emptyOption]),
-			A2(author$project$View$layerFieldOptions, selectedIndex, layers));
+			A2(author$project$MapEditor$layerFieldOptions, selectedIndex, layers));
 		return A2(
 			elm$html$Html$select,
 			_List_fromArray(
 				[
 					elm$html$Html$Attributes$class('layer-field__select'),
-					elm$html$Html$Events$onInput(author$project$Update$toSelectLayerMsg)
+					elm$html$Html$Events$onInput(author$project$MapEditor$toSelectLayerMsg)
 				]),
 			options);
 	});
-var author$project$View$layerField = F2(
+var author$project$MapEditor$layerField = F2(
 	function (selectedIndex, layers) {
 		return A2(
 			elm$html$Html$div,
@@ -8123,12 +8086,12 @@ var author$project$View$layerField = F2(
 				]),
 			_List_fromArray(
 				[
-					A2(author$project$View$layerFieldSelect, selectedIndex, layers),
-					author$project$View$layerFieldNewButton,
-					author$project$View$layerFieldDeleteButton
+					A2(author$project$MapEditor$layerFieldSelect, selectedIndex, layers),
+					author$project$MapEditor$layerFieldNewButton,
+					author$project$MapEditor$layerFieldDeleteButton
 				]));
 	});
-var author$project$View$mapTuple3 = function (tuple) {
+var author$project$MapEditor$mapTuple3 = function (tuple) {
 	if (tuple.$ === 'Just') {
 		var _n1 = tuple.a;
 		var x = _n1.a;
@@ -8142,11 +8105,7 @@ var author$project$View$mapTuple3 = function (tuple) {
 		return _Utils_Tuple3(elm$core$Maybe$Nothing, elm$core$Maybe$Nothing, elm$core$Maybe$Nothing);
 	}
 };
-var author$project$Update$SetLayerMax = function (a) {
-	return {$: 'SetLayerMax', a: a};
-};
-var author$project$Update$toSetLayerMaxMsg = A2(elm$core$Basics$composeL, author$project$Update$SetLayerMax, elm$core$String$toInt);
-var author$project$View$disabledMinMaxFieldInput = A2(
+var author$project$MapEditor$disabledMinMaxFieldInput = A2(
 	elm$html$Html$input,
 	_List_fromArray(
 		[
@@ -8155,7 +8114,7 @@ var author$project$View$disabledMinMaxFieldInput = A2(
 			elm$html$Html$Attributes$disabled(true)
 		]),
 	_List_Nil);
-var author$project$View$enabledMinMaxFieldInput = F2(
+var author$project$MapEditor$enabledMinMaxFieldInput = F2(
 	function (val, toMsg) {
 		return A2(
 			elm$html$Html$input,
@@ -8169,27 +8128,31 @@ var author$project$View$enabledMinMaxFieldInput = F2(
 				]),
 			_List_Nil);
 	});
-var author$project$View$maxInput = function (val) {
+var author$project$MapEditor$SetLayerMax = function (a) {
+	return {$: 'SetLayerMax', a: a};
+};
+var author$project$MapEditor$toSetLayerMaxMsg = A2(elm$core$Basics$composeL, author$project$MapEditor$SetLayerMax, elm$core$String$toInt);
+var author$project$MapEditor$maxInput = function (val) {
 	if (val.$ === 'Just') {
 		var v = val.a;
-		return A2(author$project$View$enabledMinMaxFieldInput, v, author$project$Update$toSetLayerMaxMsg);
+		return A2(author$project$MapEditor$enabledMinMaxFieldInput, v, author$project$MapEditor$toSetLayerMaxMsg);
 	} else {
-		return author$project$View$disabledMinMaxFieldInput;
+		return author$project$MapEditor$disabledMinMaxFieldInput;
 	}
 };
-var author$project$Update$SetLayerMin = function (a) {
+var author$project$MapEditor$SetLayerMin = function (a) {
 	return {$: 'SetLayerMin', a: a};
 };
-var author$project$Update$toSetLayerMinMsg = A2(elm$core$Basics$composeL, author$project$Update$SetLayerMin, elm$core$String$toInt);
-var author$project$View$minInput = function (val) {
+var author$project$MapEditor$toSetLayerMinMsg = A2(elm$core$Basics$composeL, author$project$MapEditor$SetLayerMin, elm$core$String$toInt);
+var author$project$MapEditor$minInput = function (val) {
 	if (val.$ === 'Just') {
 		var v = val.a;
-		return A2(author$project$View$enabledMinMaxFieldInput, v, author$project$Update$toSetLayerMinMsg);
+		return A2(author$project$MapEditor$enabledMinMaxFieldInput, v, author$project$MapEditor$toSetLayerMinMsg);
 	} else {
-		return author$project$View$disabledMinMaxFieldInput;
+		return author$project$MapEditor$disabledMinMaxFieldInput;
 	}
 };
-var author$project$View$minMaxFieldInputSeparator = A2(
+var author$project$MapEditor$minMaxFieldInputSeparator = A2(
 	elm$html$Html$div,
 	_List_fromArray(
 		[
@@ -8199,7 +8162,7 @@ var author$project$View$minMaxFieldInputSeparator = A2(
 		[
 			elm$html$Html$text('/')
 		]));
-var author$project$View$minMaxFieldLabel = A2(
+var author$project$MapEditor$minMaxFieldLabel = A2(
 	elm$html$Html$div,
 	_List_fromArray(
 		[
@@ -8209,7 +8172,7 @@ var author$project$View$minMaxFieldLabel = A2(
 		[
 			elm$html$Html$text('Min / Max')
 		]));
-var author$project$View$minMaxField = function (layer) {
+var author$project$MapEditor$minMaxField = function (layer) {
 	return A2(
 		elm$html$Html$div,
 		_List_fromArray(
@@ -8218,15 +8181,15 @@ var author$project$View$minMaxField = function (layer) {
 			]),
 		_List_fromArray(
 			[
-				author$project$View$minMaxFieldLabel,
-				author$project$View$minInput(
+				author$project$MapEditor$minMaxFieldLabel,
+				author$project$MapEditor$minInput(
 				A2(elm$core$Maybe$map, author$project$Layer$getMin, layer)),
-				author$project$View$minMaxFieldInputSeparator,
-				author$project$View$maxInput(
+				author$project$MapEditor$minMaxFieldInputSeparator,
+				author$project$MapEditor$maxInput(
 				A2(elm$core$Maybe$map, author$project$Layer$getMax, layer))
 			]));
 };
-var author$project$View$toolbarHeader = function (header) {
+var author$project$MapEditor$toolbarHeader = function (header) {
 	return A2(
 		elm$html$Html$div,
 		_List_fromArray(
@@ -8238,7 +8201,7 @@ var author$project$View$toolbarHeader = function (header) {
 				elm$html$Html$text(header)
 			]));
 };
-var author$project$View$toolbarSection = function (contents) {
+var author$project$MapEditor$toolbarSection = function (contents) {
 	return A2(
 		elm$html$Html$div,
 		_List_fromArray(
@@ -8247,9 +8210,9 @@ var author$project$View$toolbarSection = function (contents) {
 			]),
 		contents);
 };
-var author$project$View$toolbar = function (model) {
-	var _n0 = author$project$View$mapTuple3(
-		author$project$Model$getSelectedLayerAndTool(model));
+var author$project$MapEditor$toolbar = function (state) {
+	var _n0 = author$project$MapEditor$mapTuple3(
+		author$project$MapEditor$getSelectedLayerAndTool(state));
 	var layerIndex = _n0.a;
 	var layer = _n0.b;
 	var tool = _n0.c;
@@ -8261,37 +8224,34 @@ var author$project$View$toolbar = function (model) {
 			]),
 		_List_fromArray(
 			[
-				author$project$View$toolbarSection(
+				author$project$MapEditor$toolbarSection(
 				_List_fromArray(
 					[
-						author$project$View$toolbarHeader('Layer'),
-						A2(
-						author$project$View$layerField,
-						layerIndex,
-						author$project$Model$getLayers(model)),
-						author$project$View$minMaxField(layer),
-						author$project$View$colorGradientField(layer)
+						author$project$MapEditor$toolbarHeader('Layer'),
+						A2(author$project$MapEditor$layerField, layerIndex, state.layers),
+						author$project$MapEditor$minMaxField(layer),
+						author$project$MapEditor$colorGradientField(layer)
 					])),
-				author$project$View$toolbarSection(
+				author$project$MapEditor$toolbarSection(
 				_List_fromArray(
 					[
-						author$project$View$toolbarHeader('Tools')
+						author$project$MapEditor$toolbarHeader('Tools')
 					])),
-				author$project$View$toolbarSection(
+				author$project$MapEditor$toolbarSection(
 				_List_fromArray(
 					[
-						author$project$View$toolbarHeader('Brush')
+						author$project$MapEditor$toolbarHeader('Brush')
 					]))
 			]));
 };
-var author$project$View$view = function (model) {
+var author$project$MapEditor$view = function (state) {
 	var content = _Utils_ap(
 		_List_fromArray(
 			[
-				author$project$View$toolbar(model)
+				author$project$MapEditor$toolbar(state)
 			]),
-		author$project$View$modalView(
-			author$project$Model$getModal(model)));
+		author$project$MapEditor$modalView(
+			author$project$MapEditor$getModal(state)));
 	return A2(
 		elm$html$Html$div,
 		_List_fromArray(
@@ -8542,6 +8502,6 @@ var elm$browser$Browser$sandbox = function (impl) {
 		});
 };
 var author$project$Main$main = elm$browser$Browser$sandbox(
-	{init: author$project$Model$init, update: author$project$Update$update, view: author$project$View$view});
+	{init: author$project$MapEditor$init, update: author$project$MapEditor$update, view: author$project$MapEditor$view});
 _Platform_export({'Main':{'init':author$project$Main$main(
 	elm$json$Json$Decode$succeed(_Utils_Tuple0))(0)}});}(this));

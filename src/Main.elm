@@ -1,14 +1,12 @@
 module Main exposing (main)
 
 import Browser
-import Model
-import Update exposing (update)
-import View exposing (view)
+import MapEditor exposing (init, update, view)
 
 
 main =
     Browser.sandbox
-        { init = Model.init
+        { init = init
         , update = update
         , view = view
         }
