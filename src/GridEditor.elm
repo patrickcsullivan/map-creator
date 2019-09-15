@@ -1,4 +1,4 @@
-module GridEditor exposing (Msg, State, init, update, updateGrid, updatePaneSize, view)
+module GridEditor exposing (Msg, State, init, update, updateGradient, updateGrid, updatePaneSize, view)
 
 import Array exposing (Array)
 import Collage exposing (Collage)
@@ -84,6 +84,14 @@ updateGrid grid (State model) =
         |> Debug.log "State"
 
 
+updateGradient : DiscreteGradient -> State -> State
+updateGradient gradient (State model) =
+    State
+        { model
+            | gradient = gradient
+        }
+
+
 update_ : Msg -> Model -> ( Model, Grid Int )
 update_ msg model =
     case msg of
@@ -99,53 +107,53 @@ view : State -> Html Msg
 view (State model) =
     div [ class "grid-editor" ]
         [ model.grid
-            |> gridView
+            |> gridView model.gradient
             |> Collage.Render.svg
         ]
 
 
-gridView : Grid Int -> Collage Msg
-gridView rows =
+gridView : DiscreteGradient -> Grid Int -> Collage Msg
+gridView gradient rows =
     rows
         |> Array.toList
-        |> List.map rowView
+        |> List.map (rowView gradient)
         |> Collage.Layout.vertical
 
 
-rowView : Array Int -> Collage Msg
-rowView cells =
+rowView : DiscreteGradient -> Array Int -> Collage Msg
+rowView gradient cells =
     cells
         |> Array.toList
-        |> List.map cellView
+        |> List.map (cellView gradient)
         |> Collage.Layout.horizontal
 
 
-cellView : Int -> Collage Msg
-cellView _ =
+cellView : DiscreteGradient -> Int -> Collage Msg
+cellView gradient cellValue =
     let
         color =
-            Color.blue
+            DiscreteGradient.getColorAt cellValue gradient
 
         fill =
             Collage.uniform color
 
         border =
-            Collage.solid 1.5 <| Collage.uniform <| darken color
+            Collage.solid 1.5 <| Collage.uniform <| borderColor color
     in
     Collage.square 30.5
         |> Collage.styled ( fill, border )
 
 
-darken : Color -> Color
-darken color =
+borderColor : Color -> Color
+borderColor color =
     let
         c =
             Color.toHsla color
     in
     Color.hsla
         c.hue
-        c.saturation
-        (max 0 <| c.lightness - 0.125)
+        (min 1.0 <| c.saturation + 0.125)
+        (max 0.0 <| c.lightness - 0.125)
         c.alpha
 
 

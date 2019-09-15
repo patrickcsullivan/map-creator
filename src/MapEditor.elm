@@ -183,6 +183,7 @@ update_ msg state =
                         DiscreteGradientEditor.Save gradient ->
                             state
                                 |> updateSelectedLayerColorGradient gradient
+                                |> updateGridEditorGradient gradient
                                 |> closeDialog
 
                 _ ->
@@ -443,6 +444,11 @@ getGridEditor state =
 updateGridEditorPaneSize : Int -> Int -> State -> State
 updateGridEditorPaneSize paneWidth paneHeight =
     updateGridEditor (GridEditor.updatePaneSize paneWidth paneHeight)
+
+
+updateGridEditorGradient : DiscreteGradient -> State -> State
+updateGridEditorGradient gradient =
+    updateGridEditor (GridEditor.updateGradient gradient)
 
 
 updateGridEditor : (GridEditor.State -> GridEditor.State) -> State -> State

@@ -6565,8 +6565,19 @@ var author$project$Grid$repeat = F3(
 var author$project$Layer$Layer = function (a) {
 	return {$: 'Layer', a: a};
 };
-var avh4$elm_color$Color$blue = A4(avh4$elm_color$Color$RgbaSpace, 52 / 255, 101 / 255, 164 / 255, 1.0);
-var author$project$Layer$defaultColor = avh4$elm_color$Color$blue;
+var avh4$elm_color$Color$scaleFrom255 = function (c) {
+	return c / 255;
+};
+var avh4$elm_color$Color$rgb255 = F3(
+	function (r, g, b) {
+		return A4(
+			avh4$elm_color$Color$RgbaSpace,
+			avh4$elm_color$Color$scaleFrom255(r),
+			avh4$elm_color$Color$scaleFrom255(g),
+			avh4$elm_color$Color$scaleFrom255(b),
+			1.0);
+	});
+var author$project$Layer$defaultColor = A3(avh4$elm_color$Color$rgb255, 226, 192, 141);
 var author$project$Layer$init = F5(
 	function (name, width, height, minVal, maxVal) {
 		return author$project$Layer$Layer(
@@ -7000,16 +7011,13 @@ var author$project$MapEditor$updateGradientEditorDialog = F2(
 			return state;
 		}
 	});
-var author$project$GridEditor$updatePaneSize = F3(
-	function (paneWidth, paneHeight, _n0) {
+var author$project$GridEditor$updateGradient = F2(
+	function (gradient, _n0) {
 		var model = _n0.a;
-		return A2(
-			elm$core$Debug$log,
-			'State',
-			author$project$GridEditor$State(
-				_Utils_update(
-					model,
-					{paneHeight: paneHeight, paneWidth: paneWidth})));
+		return author$project$GridEditor$State(
+			_Utils_update(
+				model,
+				{gradient: gradient}));
 	});
 var author$project$MapEditor$updateGridEditor_ = F2(
 	function (f, selection) {
@@ -7029,6 +7037,21 @@ var author$project$MapEditor$updateGridEditor = F2(
 					author$project$MapEditor$updateGridEditor_(f),
 					state.layerSelection)
 			});
+	});
+var author$project$MapEditor$updateGridEditorGradient = function (gradient) {
+	return author$project$MapEditor$updateGridEditor(
+		author$project$GridEditor$updateGradient(gradient));
+};
+var author$project$GridEditor$updatePaneSize = F3(
+	function (paneWidth, paneHeight, _n0) {
+		var model = _n0.a;
+		return A2(
+			elm$core$Debug$log,
+			'State',
+			author$project$GridEditor$State(
+				_Utils_update(
+					model,
+					{paneHeight: paneHeight, paneWidth: paneWidth})));
 	});
 var author$project$MapEditor$updateGridEditorPaneSize = F2(
 	function (paneWidth, paneHeight) {
@@ -7359,7 +7382,10 @@ var author$project$MapEditor$update_ = F2(
 						default:
 							var gradient = output.a;
 							return author$project$MapEditor$closeDialog(
-								A2(author$project$MapEditor$updateSelectedLayerColorGradient, gradient, state));
+								A2(
+									author$project$MapEditor$updateGridEditorGradient,
+									gradient,
+									A2(author$project$MapEditor$updateSelectedLayerColorGradient, gradient, state)));
 					}
 				} else {
 					return state;
@@ -8745,13 +8771,13 @@ var author$project$MapEditor$dialogView = function (dialog) {
 		return _List_Nil;
 	}
 };
-var author$project$GridEditor$darken = function (color) {
+var author$project$GridEditor$borderColor = function (color) {
 	var c = avh4$elm_color$Color$toHsla(color);
 	return A4(
 		avh4$elm_color$Color$hsla,
 		c.hue,
-		c.saturation,
-		A2(elm$core$Basics$max, 0, c.lightness - 0.125),
+		A2(elm$core$Basics$min, 1.0, c.saturation + 0.125),
+		A2(elm$core$Basics$max, 0.0, c.lightness - 0.125),
 		c.alpha);
 };
 var timjs$elm_collage$Collage$Flat = {$: 'Flat'};
@@ -8809,19 +8835,20 @@ var timjs$elm_collage$Collage$styled = function (style) {
 		timjs$elm_collage$Collage$Core$collage,
 		timjs$elm_collage$Collage$Core$Shape(style));
 };
-var author$project$GridEditor$cellView = function (_n0) {
-	var color = avh4$elm_color$Color$blue;
-	var fill = timjs$elm_collage$Collage$uniform(color);
-	var border = A2(
-		timjs$elm_collage$Collage$solid,
-		1.5,
-		timjs$elm_collage$Collage$uniform(
-			author$project$GridEditor$darken(color)));
-	return A2(
-		timjs$elm_collage$Collage$styled,
-		_Utils_Tuple2(fill, border),
-		timjs$elm_collage$Collage$square(30.5));
-};
+var author$project$GridEditor$cellView = F2(
+	function (gradient, cellValue) {
+		var color = A2(author$project$DiscreteGradient$getColorAt, cellValue, gradient);
+		var fill = timjs$elm_collage$Collage$uniform(color);
+		var border = A2(
+			timjs$elm_collage$Collage$solid,
+			1.5,
+			timjs$elm_collage$Collage$uniform(
+				author$project$GridEditor$borderColor(color)));
+		return A2(
+			timjs$elm_collage$Collage$styled,
+			_Utils_Tuple2(fill, border),
+			timjs$elm_collage$Collage$square(30.5));
+	});
 var timjs$elm_collage$Collage$Layout$Right = {$: 'Right'};
 var timjs$elm_collage$Collage$shift = F2(
 	function (_n0, collage) {
@@ -9163,24 +9190,26 @@ var timjs$elm_collage$Collage$Layout$horizontal = A2(
 	elm$core$List$foldr,
 	timjs$elm_collage$Collage$Layout$beside(timjs$elm_collage$Collage$Layout$Right),
 	timjs$elm_collage$Collage$Layout$empty);
-var author$project$GridEditor$rowView = function (cells) {
-	return timjs$elm_collage$Collage$Layout$horizontal(
-		A2(
-			elm$core$List$map,
-			author$project$GridEditor$cellView,
-			elm$core$Array$toList(cells)));
-};
+var author$project$GridEditor$rowView = F2(
+	function (gradient, cells) {
+		return timjs$elm_collage$Collage$Layout$horizontal(
+			A2(
+				elm$core$List$map,
+				author$project$GridEditor$cellView(gradient),
+				elm$core$Array$toList(cells)));
+	});
 var timjs$elm_collage$Collage$Layout$vertical = A2(
 	elm$core$List$foldr,
 	timjs$elm_collage$Collage$Layout$beside(timjs$elm_collage$Collage$Layout$Down),
 	timjs$elm_collage$Collage$Layout$empty);
-var author$project$GridEditor$gridView = function (rows) {
-	return timjs$elm_collage$Collage$Layout$vertical(
-		A2(
-			elm$core$List$map,
-			author$project$GridEditor$rowView,
-			elm$core$Array$toList(rows)));
-};
+var author$project$GridEditor$gridView = F2(
+	function (gradient, rows) {
+		return timjs$elm_collage$Collage$Layout$vertical(
+			A2(
+				elm$core$List$map,
+				author$project$GridEditor$rowView(gradient),
+				elm$core$Array$toList(rows)));
+	});
 var timjs$elm_collage$Collage$opposite = function (_n0) {
 	var x = _n0.a;
 	var y = _n0.b;
@@ -9779,7 +9808,7 @@ var author$project$GridEditor$view = function (_n0) {
 		_List_fromArray(
 			[
 				timjs$elm_collage$Collage$Render$svg(
-				author$project$GridEditor$gridView(model.grid))
+				A2(author$project$GridEditor$gridView, model.gradient, model.grid))
 			]));
 };
 var author$project$MapEditor$GridEditorMsg = function (a) {

@@ -209,7 +209,7 @@ setAtGridCoordinate coord value (Layer inner) =
 
 defaultColor : Color
 defaultColor =
-    Color.blue
+    Color.rgb255 226 192 141
 
 
 setDecreasedMin : Int -> InnerLayer -> InnerLayer
