@@ -6305,11 +6305,6 @@ var author$project$MapEditor$update = F2(
 				}
 			}());
 	});
-var author$project$DiscreteGradientEditor$ClickCancel = {$: 'ClickCancel'};
-var author$project$DiscreteGradientEditor$ClickSave = {$: 'ClickSave'};
-var author$project$DiscreteGradientEditor$ColorPickerMsg = function (a) {
-	return {$: 'ColorPickerMsg', a: a};
-};
 var elm$core$Result$isOk = function (result) {
 	if (result.$ === 'Ok') {
 		return true;
@@ -6485,8 +6480,6 @@ var elm$virtual_dom$VirtualDom$toHandlerInt = function (handler) {
 	}
 };
 var elm$html$Html$div = _VirtualDom_node('div');
-var elm$virtual_dom$VirtualDom$map = _VirtualDom_map;
-var elm$html$Html$map = elm$virtual_dom$VirtualDom$map;
 var elm$json$Json$Encode$string = _Json_wrap;
 var elm$html$Html$Attributes$stringProperty = F2(
 	function (key, string) {
@@ -6496,6 +6489,22 @@ var elm$html$Html$Attributes$stringProperty = F2(
 			elm$json$Json$Encode$string(string));
 	});
 var elm$html$Html$Attributes$class = elm$html$Html$Attributes$stringProperty('className');
+var author$project$MapEditor$mapPaneView = function (state) {
+	return A2(
+		elm$html$Html$div,
+		_List_fromArray(
+			[
+				elm$html$Html$Attributes$class('map-pane')
+			]),
+		_List_Nil);
+};
+var author$project$DiscreteGradientEditor$ClickCancel = {$: 'ClickCancel'};
+var author$project$DiscreteGradientEditor$ClickSave = {$: 'ClickSave'};
+var author$project$DiscreteGradientEditor$ColorPickerMsg = function (a) {
+	return {$: 'ColorPickerMsg', a: a};
+};
+var elm$virtual_dom$VirtualDom$map = _VirtualDom_map;
+var elm$html$Html$map = elm$virtual_dom$VirtualDom$map;
 var avh4$elm_color$Color$hsl = F3(
 	function (h, s, l) {
 		return A4(avh4$elm_color$Color$hsla, h, s, l, 1.0);
@@ -8248,7 +8257,8 @@ var author$project$MapEditor$view = function (state) {
 	var content = _Utils_ap(
 		_List_fromArray(
 			[
-				author$project$MapEditor$toolbar(state)
+				author$project$MapEditor$toolbar(state),
+				author$project$MapEditor$mapPaneView(state)
 			]),
 		author$project$MapEditor$modalView(
 			author$project$MapEditor$getModal(state)));

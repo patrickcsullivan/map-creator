@@ -11,6 +11,7 @@ body, html {
     /* Default font settings */
     font-size: 14px;
     font-family: sans-serif;
+    color: rgb(204, 204, 204);
 }
 
 .mask {
@@ -23,7 +24,7 @@ body, html {
 }
 
 .modal {
-    background: rgb(255, 255, 255);
+    background: rgb(37, 37, 38);
     position: absolute;
     top: 50%;
     left: 50%;
@@ -36,10 +37,18 @@ body, html {
     transform: translate(-50%, -50%);
 }
 
+
+/* MAP PANE */
+
+.map-pane {
+    background: rgb(30, 30, 30);
+    flex-grow: 1;
+}
+
 /* TOOLBAR */
 
 .toolbar {
-    background: rgb(231, 231, 231);
+    background: rgb(37, 37, 38);
     flex-grow: 0;
     width: 300px;
     padding: 8px;
@@ -53,12 +62,14 @@ body, html {
     display: flex;
     flex-direction: column;
     margin: 8px 0;
-    box-shadow: 0 1px 0 0 rgb(150, 150, 150);
+    box-shadow: 0 1px 0 0 rgb(51, 51, 51);
 }
 
 .toolbar__header {
-    font-size: 18px;
+    /* font-size: 18px; */
+    font-weight: bold;
     margin-bottom: 8px;
+    color: rgb(148, 220, 254);
 }
 
 .layer-field {
@@ -120,12 +131,6 @@ body, html {
     background-color: rgba(0, 0, 0, 0.05)
 }
 
-/* MAP PANE */
-
-.map-pane {
-    background: rgb(31, 32, 32);
-    flex-grow: 1;
-}
 
 /* NEW LAYER DIALOG */
 
@@ -134,9 +139,11 @@ body, html {
 }
 
 .new-layer-dialog__header {
-    font-size: 18px;
+    /* font-size: 18px; */
+    font-weight: bold;
     text-align: center;
     margin-bottom: 16px;
+    color: rgb(148, 220, 254);
 }
 
 .new-layer-dialog__name-field {
@@ -173,10 +180,12 @@ body, html {
 }
 
 .gradient-editor__header {
-    font-size: 18px;
+    /* font-size: 18px; */
     text-align: center;
     font-weight: bold;
     margin-bottom: 16px;
+    color: rgb(148, 220, 254);
+    font-weight: bold;
 }
 
 .gradient-editor__gradient {

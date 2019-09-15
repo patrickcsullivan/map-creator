@@ -364,7 +364,10 @@ view : State -> Html Msg
 view state =
     let
         content =
-            [ toolbar state ] ++ (modalView <| getModal state)
+            [ toolbar state
+            , mapPaneView state
+            ]
+                ++ (modalView <| getModal state)
     in
     Html.div [ Html.Attributes.class "page" ]
         content
@@ -431,6 +434,16 @@ gradientEditorDialog : DiscreteGradientEditor.State -> Html Msg
 gradientEditorDialog state =
     DiscreteGradientEditor.view state
         |> Html.map GradientEditorMsg
+
+
+
+-- MAP PANE
+
+
+mapPaneView : State -> Html Msg
+mapPaneView state =
+    Html.div [ Html.Attributes.class "map-pane" ]
+        []
 
 
 
