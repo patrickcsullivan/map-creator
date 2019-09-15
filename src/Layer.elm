@@ -11,6 +11,7 @@ module Layer exposing
     , resizeGrid
     , setAtGridCoordinate
     , setColorGradient
+    , setGrid
     , setMax
     , setMin
     , setName
@@ -30,6 +31,9 @@ import Grid exposing (Coordinate, Grid)
 
 
 
+-- TODO:
+-- Refactor this. Maybe it doesn't need to be a closed type. There are a lot of getters and setters and many setters
+-- aren't being used.
 -- INVARIANTS:
 -- Grid width must be greater than 0.
 -- Grid height must be greater than 0.
@@ -131,6 +135,21 @@ setMax newMax (Layer inner) =
         Layer (setIncreasedMax newMax inner)
 
 
+setGrid : Grid Int -> Layer -> Layer
+setGrid grid (Layer inner) =
+    let
+        newGrid =
+            grid
+                |> resizeGrid_ inner.min inner.width inner.height
+                |> applyFloorToGrid inner.min
+                |> applyCeilingToGrid inner.max
+    in
+    Layer
+        { inner
+            | grid = grid
+        }
+
+
 setColorGradient : DiscreteGradient -> Layer -> Layer
 setColorGradient dg (Layer inner) =
     let
@@ -147,14 +166,29 @@ setColorGradient dg (Layer inner) =
 
 resizeGrid : Int -> Int -> Layer -> Layer
 resizeGrid width height (Layer inner) =
-    if width < 1 || height < 1 || (width == inner.width && height == inner.height) then
-        Layer inner
+    Layer
+        { inner
+            | grid = resizeGrid_ inner.min width height inner.grid
+        }
+
+
+resizeGrid_ : Int -> Int -> Int -> Grid Int -> Grid Int
+resizeGrid_ default width height grid =
+    if width < 1 || height < 1 || (width == Grid.width grid) && (height == Grid.height grid) then
+        grid
 
     else
-        Layer
-            { inner
-                | grid = unsafeResizeGrid width height inner.min inner.grid
-            }
+        let
+            filler : Int -> Int -> Int
+            filler x y =
+                case Grid.get ( x, y ) grid of
+                    Just cell ->
+                        cell
+
+                    Nothing ->
+                        default
+        in
+        Grid.rectangle width height filler
 
 
 setAtGridCoordinate : Coordinate -> Int -> Layer -> Layer
@@ -176,21 +210,6 @@ setAtGridCoordinate coord value (Layer inner) =
 defaultColor : Color
 defaultColor =
     Color.blue
-
-
-unsafeResizeGrid : Int -> Int -> a -> Grid a -> Grid a
-unsafeResizeGrid width height default grid =
-    let
-        filler : Int -> Int -> a
-        filler x y =
-            case Grid.get ( x, y ) grid of
-                Just cell ->
-                    cell
-
-                Nothing ->
-                    default
-    in
-    Grid.rectangle width height filler
 
 
 setDecreasedMin : Int -> InnerLayer -> InnerLayer

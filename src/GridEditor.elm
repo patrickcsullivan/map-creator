@@ -97,7 +97,7 @@ update_ msg model =
 
 view : State -> Html Msg
 view (State model) =
-    div [ class "map-pane" ]
+    div [ class "grid-editor" ]
         [ model.grid
             |> gridView
             |> Collage.Render.svg

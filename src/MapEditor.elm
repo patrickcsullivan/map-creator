@@ -4,6 +4,7 @@ import Brush exposing (Brush)
 import Color
 import DiscreteGradient exposing (DiscreteGradient)
 import DiscreteGradientEditor
+import Grid exposing (Grid)
 import GridEditor
 import Html exposing (Html)
 import Html.Attributes
@@ -39,16 +40,16 @@ type alias State =
 -- If selected layer index exists it must be greater than 0 and less than the number of layers.
 
 
-type Tool
-    = Pan
-    | Brush Brush
-
-
 type alias LayerSelection =
     { layerIndex : Int
     , tool : Tool
     , gridEditor : GridEditor.State
     }
+
+
+type Tool
+    = Pan
+    | Brush Brush
 
 
 type Dialog
@@ -98,6 +99,7 @@ type Msg
     | SetLayerMax (Maybe Int)
     | OpenGradientEditorDialog
     | GradientEditorMsg DiscreteGradientEditor.Msg
+    | GridEditorMsg GridEditor.Msg
 
 
 update : Msg -> State -> ( State, Cmd Msg )
@@ -169,6 +171,18 @@ update msg state =
 
                 _ ->
                     state
+
+        GridEditorMsg editorMsg ->
+            case getGridEditor state of
+                Just gridEditor ->
+                    let
+                        ( newGridEditor, grid ) =
+                            GridEditor.update editorMsg gridEditor
+                    in
+                    state |> updateSelectedLayerGrid grid
+
+                _ ->
+                    state
     )
         |> Debug.log "State"
         |> (\s -> ( s, Cmd.none ))
@@ -187,25 +201,6 @@ toSetLayerMinMsg =
 toSetLayerMaxMsg : String -> Msg
 toSetLayerMaxMsg =
     SetLayerMax << String.toInt
-
-
-getSelectedLayerIndex : State -> Maybe Int
-getSelectedLayerIndex state =
-    state.layerSelection
-        |> Maybe.map (\s -> s.layerIndex)
-
-
-getSelectedLayer : State -> Maybe Layer
-getSelectedLayer state =
-    state
-        |> getSelectedLayerIndex
-        |> Maybe.andThen (flip List.getAt state.layers)
-
-
-getSelectedTool : State -> Maybe Tool
-getSelectedTool state =
-    state.layerSelection
-        |> Maybe.map (\s -> s.tool)
 
 
 
@@ -275,7 +270,37 @@ updateGradientEditorDialog dialog state =
 
 
 
--- LAYERS
+-- LAYERS AND TOOL
+
+
+getLayerCount : State -> Int
+getLayerCount state =
+    state.layers |> List.length
+
+
+getSelectedLayerIndex : State -> Maybe Int
+getSelectedLayerIndex state =
+    state.layerSelection
+        |> Maybe.map (\s -> s.layerIndex)
+
+
+getSelectedLayer : State -> Maybe Layer
+getSelectedLayer state =
+    state
+        |> getSelectedLayerIndex
+        |> Maybe.andThen (flip List.getAt state.layers)
+
+
+getSelectedTool : State -> Maybe Tool
+getSelectedTool state =
+    state.layerSelection
+        |> Maybe.map (\s -> s.tool)
+
+
+getGridEditor : State -> Maybe GridEditor.State
+getGridEditor state =
+    state.layerSelection
+        |> Maybe.map (\s -> s.gridEditor)
 
 
 deleteSelectedLayer : State -> State
@@ -349,10 +374,14 @@ updateSelectedLayerColorGradient =
     updateSelectedLayer << Layer.setColorGradient
 
 
+updateSelectedLayerGrid : Grid Int -> State -> State
+updateSelectedLayerGrid =
+    updateSelectedLayer << Layer.setGrid
+
+
 
 -- TODO:
 -- resize : Int -> Int -> State
--- getTool : State -> Tool
 -- selectBrushTool : State -> State
 -- selectPanTool : State -> State
 -- stroke stuff
@@ -385,17 +414,7 @@ updateSelectedLayer f state =
             state
 
 
-getLayerCount : State -> Int
-getLayerCount state =
-    state.layers |> List.length
 
-
-
--- getSelectedLayer : State -> Maybe Layer
--- getSelectedLayer state =
---     state.selectedLayerIndexAndTool
---         |> Maybe.map (\( i, _ ) -> i)
---         |> Maybe.andThen (flip getAt state.layers)
 --------------------------------------------------------------------------------
 -- VIEW
 
@@ -405,7 +424,7 @@ view state =
     let
         content =
             [ toolbar state
-            , gridEditorPaneView (getSelectedLayer state)
+            , gridEditorPaneView (getGridEditor state)
             ]
                 ++ (dialogView <| getDialog state)
     in
@@ -480,11 +499,14 @@ gradientEditorDialog state =
 -- GRID EDITOR PANE
 
 
-gridEditorPaneView : Maybe Layer -> Html Msg
-gridEditorPaneView layer =
+gridEditorPaneView : Maybe GridEditor.State -> Html Msg
+gridEditorPaneView maybeGridEditor =
     let
         content =
-            []
+            maybeGridEditor
+                |> Maybe.map GridEditor.view
+                |> Maybe.map (Html.map GridEditorMsg)
+                |> Maybe.toList
 
         -- layer
         -- |> Maybe.map GridEditor.view
