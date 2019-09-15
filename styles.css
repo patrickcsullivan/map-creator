@@ -42,9 +42,9 @@ body, html {
     text-transform: uppercase;
 }
 
-/* MAP PANE */
+/* GRID EDITOR PANE */
 
-.map-pane {
+.grid-editor-pane {
     background: rgb(30, 30, 30);
     flex-grow: 1;
 }
@@ -52,9 +52,9 @@ body, html {
 /* TOOLBAR */
 
 .toolbar {
+    /* width defined programmatically in Elm */
     background: rgb(37, 37, 38);
     flex-grow: 0;
-    width: 300px;
     overflow-x: hidden;
     overflow-y: auto;
     display: flex;

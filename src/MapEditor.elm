@@ -1,4 +1,4 @@
-module MapEditor exposing (init, update, view)
+module MapEditor exposing (Msg, State, init, update, view)
 
 import Brush exposing (Brush)
 import Color
@@ -24,8 +24,10 @@ type alias State =
     , width : Int
     , height : Int
     , layers : List Layer
-    , selectedLayerIndexAndTool : Maybe ( Int, Tool )
+    , layerSelection : Maybe LayerSelection
     , dialog : Maybe Dialog
+    , windowWidth : Float
+    , windowHeight : Float
     }
 
 
@@ -42,20 +44,42 @@ type Tool
     | Brush Brush
 
 
+type alias LayerSelection =
+    { layerIndex : Int
+    , tool : Tool
+    , gridEditor : GridEditor.State
+    }
+
+
 type Dialog
     = NewLayerDialog String
     | GradientEditorDialog DiscreteGradientEditor.State
 
 
-init : State
-init =
-    { name = "untitled"
-    , width = 10
-    , height = 10
-    , layers = []
-    , selectedLayerIndexAndTool = Nothing
-    , dialog = Nothing
-    }
+init : ( Float, Float ) -> ( State, Cmd Msg )
+init ( windowWidth, windowHeight ) =
+    ( { name = "untitled"
+      , width = 10
+      , height = 10
+      , layers = []
+      , layerSelection = Nothing
+      , dialog = Nothing
+      , windowWidth = windowWidth
+      , windowHeight = windowHeight
+      }
+    , Cmd.none
+    )
+
+
+initGridEditor : Layer -> Float -> Float -> GridEditor.State
+initGridEditor layer paneWidth paneHeight =
+    GridEditor.init
+        (Layer.getGrid layer)
+        (Layer.getMin layer)
+        (Layer.getMax layer)
+        (Layer.getColorGradient layer)
+        paneWidth
+        paneHeight
 
 
 
@@ -76,7 +100,7 @@ type Msg
     | GradientEditorMsg DiscreteGradientEditor.Msg
 
 
-update : Msg -> State -> State
+update : Msg -> State -> ( State, Cmd Msg )
 update msg state =
     (case msg |> Debug.log "msg" of
         SelectLayer index ->
@@ -147,6 +171,7 @@ update msg state =
                     state
     )
         |> Debug.log "State"
+        |> (\s -> ( s, Cmd.none ))
 
 
 toSelectLayerMsg : String -> Msg
@@ -164,19 +189,23 @@ toSetLayerMaxMsg =
     SetLayerMax << String.toInt
 
 
-getSelectedLayerAndTool : State -> Maybe ( Int, Layer, Tool )
-getSelectedLayerAndTool state =
-    case state.selectedLayerIndexAndTool of
-        Nothing ->
-            Nothing
+getSelectedLayerIndex : State -> Maybe Int
+getSelectedLayerIndex state =
+    state.layerSelection
+        |> Maybe.map (\s -> s.layerIndex)
 
-        Just ( layerIndex, tool ) ->
-            case List.getAt layerIndex state.layers of
-                Nothing ->
-                    Nothing
 
-                Just layer ->
-                    Just ( layerIndex, layer, tool )
+getSelectedLayer : State -> Maybe Layer
+getSelectedLayer state =
+    state
+        |> getSelectedLayerIndex
+        |> Maybe.andThen (flip List.getAt state.layers)
+
+
+getSelectedTool : State -> Maybe Tool
+getSelectedTool state =
+    state.layerSelection
+        |> Maybe.map (\s -> s.tool)
 
 
 
@@ -216,8 +245,8 @@ setNewLayerDialogName layerName state =
 
 openGradientEditorDialog : State -> State
 openGradientEditorDialog state =
-    case getSelectedLayerAndTool state of
-        Just ( _, layer, _ ) ->
+    case getSelectedLayer state of
+        Just layer ->
             let
                 editorState =
                     DiscreteGradientEditor.init
@@ -251,11 +280,11 @@ updateGradientEditorDialog dialog state =
 
 deleteSelectedLayer : State -> State
 deleteSelectedLayer state =
-    case state.selectedLayerIndexAndTool of
-        Just ( index, _ ) ->
+    case getSelectedLayerIndex state of
+        Just index ->
             { state
                 | layers = remove index state.layers
-                , selectedLayerIndexAndTool = Nothing
+                , layerSelection = Nothing
             }
 
         _ ->
@@ -278,7 +307,7 @@ selectLayer index state =
     case index of
         Nothing ->
             { state
-                | selectedLayerIndexAndTool = Nothing
+                | layerSelection = Nothing
             }
 
         Just i ->
@@ -286,12 +315,22 @@ selectLayer index state =
                 Nothing ->
                     state
 
-                -- TODO:
-                -- Don't update tool if selected layer doesn't change.
-                -- Set the same type of tool that was previously in use if layer changes.
-                Just _ ->
+                Just layer ->
                     { state
-                        | selectedLayerIndexAndTool = Just ( i, Pan )
+                        | layerSelection =
+                            Just
+                                { layerIndex = i
+
+                                -- TODO:
+                                -- Don't update tool if selected layer doesn't change.
+                                -- Set the same type of tool that was previously in use if layer changes.
+                                , tool = Pan
+                                , gridEditor =
+                                    initGridEditor
+                                        layer
+                                        (gridEditorPaneWidth state.windowWidth)
+                                        state.windowHeight
+                                }
                     }
 
 
@@ -321,8 +360,8 @@ updateSelectedLayerColorGradient =
 
 updateSelectedLayer : (Layer -> Layer) -> State -> State
 updateSelectedLayer f state =
-    case state.selectedLayerIndexAndTool of
-        Just ( selectedIndex, _ ) ->
+    case getSelectedLayerIndex state of
+        Just selectedIndex ->
             case List.getAt selectedIndex state.layers of
                 Just _ ->
                     let
@@ -366,8 +405,7 @@ view state =
     let
         content =
             [ toolbar state
-
-            -- , mapPaneView state
+            , gridEditorPaneView (getSelectedLayer state)
             ]
                 ++ (dialogView <| getDialog state)
     in
@@ -440,21 +478,36 @@ gradientEditorDialog state =
 
 
 -- GRID EDITOR PANE
--- gridEditorPaneView : Maybe Layer -> Html Msg
--- gridEditorPaneView layer =
---     let content =
---         layer
---         |> Maybe.map GridEditor.view
---     Html.div [ Html.Attributes.class "grid-editor-pane" ]
---         []
+
+
+gridEditorPaneView : Maybe Layer -> Html Msg
+gridEditorPaneView layer =
+    let
+        content =
+            []
+
+        -- layer
+        -- |> Maybe.map GridEditor.view
+    in
+    Html.div [ Html.Attributes.class "grid-editor-pane" ]
+        content
+
+
+
 -- TOOLBAR
 
 
 toolbar : State -> Html Msg
 toolbar state =
     let
-        ( layerIndex, layer, tool ) =
-            mapTuple3 <| getSelectedLayerAndTool state
+        layerIndex =
+            getSelectedLayerIndex state
+
+        layer =
+            getSelectedLayer state
+
+        tool =
+            getSelectedTool state
     in
     Html.div [ Html.Attributes.class "toolbar" ]
         [ toolbarSectionHeader "Layer"
@@ -722,6 +775,21 @@ onClick message =
 
 
 --------------------------------------------------------------------------------
+-- LAYOUT CALCULATIONS
+
+
+toolbarWidth : Float
+toolbarWidth =
+    300.0
+
+
+gridEditorPaneWidth : Float -> Float
+gridEditorPaneWidth windowWidth =
+    max 0.0 (windowWidth - toolbarWidth)
+
+
+
+--------------------------------------------------------------------------------
 -- HELPERS
 
 
@@ -735,18 +803,15 @@ isJustEqual maybeX y =
             x == y
 
 
-mapTuple3 : Maybe ( a, b, c ) -> ( Maybe a, Maybe b, Maybe c )
-mapTuple3 tuple =
-    case tuple of
-        Just ( x, y, z ) ->
-            ( Just x, Just y, Just z )
-
-        Nothing ->
-            ( Nothing, Nothing, Nothing )
-
-
 {-| Remove the element at the given index in the list.
 -}
 remove : Int -> List a -> List a
 remove index xs =
     List.take index xs ++ List.drop (index + 1) xs
+
+
+{-| Flip the function's parameter order.
+-}
+flip : (a -> b -> c) -> (b -> a -> c)
+flip f =
+    \b a -> f a b

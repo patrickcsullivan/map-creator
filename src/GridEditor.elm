@@ -25,12 +25,12 @@ type alias Model =
     , cellMin : Int
     , cellMax : Int
     , gradient : DiscreteGradient
-    , paneWidth : Int
-    , paneHeight : Int
+    , paneWidth : Float
+    , paneHeight : Float
     }
 
 
-init : Grid Int -> Int -> Int -> DiscreteGradient -> Int -> Int -> State
+init : Grid Int -> Int -> Int -> DiscreteGradient -> Float -> Float -> State
 init grid cellMin cellMax gradient paneWidth paneHeight =
     let
         g =
@@ -61,7 +61,7 @@ update msg (State model) =
         |> Debug.log "State"
 
 
-updatePaneSize : Int -> Int -> State -> State
+updatePaneSize : Float -> Float -> State -> State
 updatePaneSize paneWidth paneHeight (State model) =
     State
         { model
