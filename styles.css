@@ -224,6 +224,7 @@ body, html {
     padding: 0 !important;
     box-shadow: none !important;
     border-radius: 0 !important;
+    background: rgba(0, 0, 0, 0) !important;
 }
 
 .gradient-editor__color-picker .color-picker-container div {
