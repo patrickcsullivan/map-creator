@@ -1,4 +1,4 @@
-module MapPane exposing (Msg, State, init, update, updateGrid, updatePaneSize, view)
+module GridEditor exposing (Msg, State, init, update, updateGrid, updatePaneSize, view)
 
 import Array exposing (Array)
 import Collage exposing (Collage)
@@ -21,26 +21,28 @@ type State
 
 
 type alias Model =
-    { cellMin : Int
+    { grid : Grid Int
+    , cellMin : Int
     , cellMax : Int
-    , grid : Grid Int
     , gradient : DiscreteGradient
-    , paneSize : Maybe ( Int, Int )
+    , paneWidth : Int
+    , paneHeight : Int
     }
 
 
-init : Grid Int -> Int -> Int -> DiscreteGradient -> State
-init grid cellMin cellMax gradient =
+init : Grid Int -> Int -> Int -> DiscreteGradient -> Int -> Int -> State
+init grid cellMin cellMax gradient paneWidth paneHeight =
     let
         g =
-            Grid.map (boundInt cellMin cellMax) grid
+            boundGrid cellMin cellMax grid
     in
     State
         { grid = g
         , cellMin = cellMin
         , cellMax = cellMax
         , gradient = gradient
-        , paneSize = Nothing
+        , paneWidth = paneWidth
+        , paneHeight = paneHeight
         }
 
 
@@ -63,16 +65,21 @@ updatePaneSize : Int -> Int -> State -> State
 updatePaneSize paneWidth paneHeight (State model) =
     State
         { model
-            | paneSize = Just ( paneWidth, paneHeight )
+            | paneWidth = paneWidth
+            , paneHeight = paneHeight
         }
         |> Debug.log "State"
 
 
 updateGrid : Grid Int -> State -> State
 updateGrid grid (State model) =
+    let
+        g =
+            boundGrid model.cellMin model.cellMax grid
+    in
     State
         { model
-            | grid = grid
+            | grid = g
         }
         |> Debug.log "State"
 
@@ -95,11 +102,6 @@ view (State model) =
             |> gridView
             |> Collage.Render.svg
         ]
-
-
-minPadding : Float
-minPadding =
-    64.0
 
 
 gridView : Grid Int -> Collage Msg
@@ -149,6 +151,11 @@ darken color =
 
 
 -- HELPERS
+
+
+boundGrid : Int -> Int -> Grid Int -> Grid Int
+boundGrid lower upper =
+    Grid.map (boundInt lower upper)
 
 
 boundInt : Int -> Int -> Int -> Int

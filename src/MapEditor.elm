@@ -4,6 +4,7 @@ import Brush exposing (Brush)
 import Color
 import DiscreteGradient exposing (DiscreteGradient)
 import DiscreteGradientEditor
+import GridEditor
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -365,7 +366,8 @@ view state =
     let
         content =
             [ toolbar state
-            , mapPaneView state
+
+            -- , mapPaneView state
             ]
                 ++ (dialogView <| getDialog state)
     in
@@ -437,16 +439,14 @@ gradientEditorDialog state =
 
 
 
--- MAP PANE
-
-
-mapPaneView : State -> Html Msg
-mapPaneView state =
-    Html.div [ Html.Attributes.class "map-pane" ]
-        []
-
-
-
+-- GRID EDITOR PANE
+-- gridEditorPaneView : Maybe Layer -> Html Msg
+-- gridEditorPaneView layer =
+--     let content =
+--         layer
+--         |> Maybe.map GridEditor.view
+--     Html.div [ Html.Attributes.class "grid-editor-pane" ]
+--         []
 -- TOOLBAR
 
 
