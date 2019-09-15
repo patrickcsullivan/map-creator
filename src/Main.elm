@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import MapEditor exposing (init, update, view)
+import MapEditor exposing (init, subscriptions, update, view)
 
 
 main =
@@ -11,8 +11,3 @@ main =
         , subscriptions = subscriptions
         , view = view
         }
-
-
-subscriptions : MapEditor.State -> Sub MapEditor.Msg
-subscriptions _ =
-    Sub.none

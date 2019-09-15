@@ -1,5 +1,6 @@
-module MapEditor exposing (Msg, State, init, update, view)
+module MapEditor exposing (Msg, State, init, subscriptions, update, view)
 
+import Browser.Events
 import Brush exposing (Brush)
 import Color
 import DiscreteGradient exposing (DiscreteGradient)
@@ -27,8 +28,8 @@ type alias State =
     , layers : List Layer
     , layerSelection : Maybe LayerSelection
     , dialog : Maybe Dialog
-    , windowWidth : Float
-    , windowHeight : Float
+    , windowWidth : Int
+    , windowHeight : Int
     }
 
 
@@ -57,7 +58,7 @@ type Dialog
     | GradientEditorDialog DiscreteGradientEditor.State
 
 
-init : ( Float, Float ) -> ( State, Cmd Msg )
+init : ( Int, Int ) -> ( State, Cmd Msg )
 init ( windowWidth, windowHeight ) =
     ( { name = "untitled"
       , width = 10
@@ -72,7 +73,7 @@ init ( windowWidth, windowHeight ) =
     )
 
 
-initGridEditor : Layer -> Float -> Float -> GridEditor.State
+initGridEditor : Layer -> Int -> Int -> GridEditor.State
 initGridEditor layer paneWidth paneHeight =
     GridEditor.init
         (Layer.getGrid layer)
@@ -89,7 +90,8 @@ initGridEditor layer paneWidth paneHeight =
 
 
 type Msg
-    = SelectLayer (Maybe Int)
+    = WindowResize Int Int
+    | SelectLayer (Maybe Int)
     | DeleteSelectedLayer
     | OpenNewLayerDialog
     | SetNewLayerDialogNameField String
@@ -104,7 +106,21 @@ type Msg
 
 update : Msg -> State -> ( State, Cmd Msg )
 update msg state =
-    (case msg |> Debug.log "msg" of
+    ( update_ msg state, Cmd.none )
+
+
+update_ : Msg -> State -> State
+update_ msg state =
+    case msg of
+        WindowResize width height ->
+            { state
+                | windowWidth = width
+                , windowHeight = height
+            }
+                |> updateGridEditorPaneSize
+                    (gridEditorPaneWidth width)
+                    (gridEditorPaneHeight height)
+
         SelectLayer index ->
             selectLayer index state
 
@@ -183,9 +199,11 @@ update msg state =
 
                 _ ->
                     state
-    )
-        |> Debug.log "State"
-        |> (\s -> ( s, Cmd.none ))
+
+
+subscriptions : State -> Sub Msg
+subscriptions _ =
+    Browser.Events.onResize WindowResize
 
 
 toSelectLayerMsg : String -> Msg
@@ -270,7 +288,7 @@ updateGradientEditorDialog dialog state =
 
 
 
--- LAYERS AND TOOL
+-- LAYERS
 
 
 getLayerCount : State -> Int
@@ -289,18 +307,6 @@ getSelectedLayer state =
     state
         |> getSelectedLayerIndex
         |> Maybe.andThen (flip List.getAt state.layers)
-
-
-getSelectedTool : State -> Maybe Tool
-getSelectedTool state =
-    state.layerSelection
-        |> Maybe.map (\s -> s.tool)
-
-
-getGridEditor : State -> Maybe GridEditor.State
-getGridEditor state =
-    state.layerSelection
-        |> Maybe.map (\s -> s.gridEditor)
 
 
 deleteSelectedLayer : State -> State
@@ -354,7 +360,7 @@ selectLayer index state =
                                     initGridEditor
                                         layer
                                         (gridEditorPaneWidth state.windowWidth)
-                                        state.windowHeight
+                                        (gridEditorPaneWidth state.windowHeight)
                                 }
                     }
 
@@ -412,6 +418,45 @@ updateSelectedLayer f state =
 
         _ ->
             state
+
+
+
+-- TOOL
+
+
+getSelectedTool : State -> Maybe Tool
+getSelectedTool state =
+    state.layerSelection
+        |> Maybe.map (\s -> s.tool)
+
+
+
+-- GRID EDITOR
+
+
+getGridEditor : State -> Maybe GridEditor.State
+getGridEditor state =
+    state.layerSelection
+        |> Maybe.map (\s -> s.gridEditor)
+
+
+updateGridEditorPaneSize : Int -> Int -> State -> State
+updateGridEditorPaneSize paneWidth paneHeight =
+    updateGridEditor (GridEditor.updatePaneSize paneWidth paneHeight)
+
+
+updateGridEditor : (GridEditor.State -> GridEditor.State) -> State -> State
+updateGridEditor f state =
+    { state
+        | layerSelection = state.layerSelection |> Maybe.map (updateGridEditor_ f)
+    }
+
+
+updateGridEditor_ : (GridEditor.State -> GridEditor.State) -> LayerSelection -> LayerSelection
+updateGridEditor_ f selection =
+    { selection
+        | gridEditor = f selection.gridEditor
+    }
 
 
 
@@ -531,7 +576,10 @@ toolbar state =
         tool =
             getSelectedTool state
     in
-    Html.div [ Html.Attributes.class "toolbar" ]
+    Html.div
+        [ Html.Attributes.class "toolbar"
+        , Html.Attributes.style "width" (String.fromInt toolbarWidth ++ "px")
+        ]
         [ toolbarSectionHeader "Layer"
         , toolbarSectionContents
             [ layerField layerIndex state.layers
@@ -800,14 +848,19 @@ onClick message =
 -- LAYOUT CALCULATIONS
 
 
-toolbarWidth : Float
+toolbarWidth : Int
 toolbarWidth =
-    300.0
+    250
 
 
-gridEditorPaneWidth : Float -> Float
+gridEditorPaneWidth : Int -> Int
 gridEditorPaneWidth windowWidth =
-    max 0.0 (windowWidth - toolbarWidth)
+    max 0 (windowWidth - toolbarWidth)
+
+
+gridEditorPaneHeight : Int -> Int
+gridEditorPaneHeight windowHeight =
+    windowHeight
 
 
 
