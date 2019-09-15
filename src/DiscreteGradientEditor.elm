@@ -311,7 +311,7 @@ view (State model) =
             hasStopAt model.selectedValue model.gradient
     in
     div [ class "gradient-editor" ]
-        [ div [ class "gradient-editor__header" ] [ text "Edit Gradient" ]
+        [ div [ class "dialog__header", class "gradient-editor__header" ] [ text "Edit Gradient" ]
         , div [ class "gradient-editor__gradient" ] [ gradientView model.gradient model.gradientMin model.gradientMax ]
         , div [ class "gradient-editor__color-and-stop-row" ]
             [ colorSwatchView model.selectedColor

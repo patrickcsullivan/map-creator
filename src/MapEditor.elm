@@ -24,7 +24,7 @@ type alias State =
     , height : Int
     , layers : List Layer
     , selectedLayerIndexAndTool : Maybe ( Int, Tool )
-    , modal : Maybe Modal
+    , dialog : Maybe Dialog
     }
 
 
@@ -41,7 +41,7 @@ type Tool
     | Brush Brush
 
 
-type Modal
+type Dialog
     = NewLayerDialog String
     | GradientEditorDialog DiscreteGradientEditor.State
 
@@ -53,7 +53,7 @@ init =
     , height = 10
     , layers = []
     , selectedLayerIndexAndTool = Nothing
-    , modal = Nothing
+    , dialog = Nothing
     }
 
 
@@ -91,15 +91,15 @@ update msg state =
             setNewLayerDialogName layerName state
 
         NewLayerDialogCancel ->
-            closeModal state
+            closeDialog state
 
         NewLayerDialogCreate ->
-            case getModal state of
+            case getDialog state of
                 Just (NewLayerDialog layerName) ->
                     state
                         |> createLayer layerName
                         |> selectLayer (Just (getLayerCount state))
-                        |> closeModal
+                        |> closeDialog
 
                 _ ->
                     state
@@ -124,7 +124,7 @@ update msg state =
             openGradientEditorDialog state
 
         GradientEditorMsg editorMsg ->
-            case getModal state of
+            case getDialog state of
                 Just (GradientEditorDialog dialog) ->
                     let
                         ( newDialog, output ) =
@@ -135,12 +135,12 @@ update msg state =
                             updateGradientEditorDialog newDialog state
 
                         DiscreteGradientEditor.Cancel ->
-                            closeModal state
+                            closeDialog state
 
                         DiscreteGradientEditor.Save gradient ->
                             state
                                 |> updateSelectedLayerColorGradient gradient
-                                |> closeModal
+                                |> closeDialog
 
                 _ ->
                     state
@@ -182,31 +182,31 @@ getSelectedLayerAndTool state =
 -- MODAL / DIALOGS
 
 
-getModal : State -> Maybe Modal
-getModal state =
-    state.modal
+getDialog : State -> Maybe Dialog
+getDialog state =
+    state.dialog
 
 
-closeModal : State -> State
-closeModal state =
+closeDialog : State -> State
+closeDialog state =
     { state
-        | modal = Nothing
+        | dialog = Nothing
     }
 
 
 openNewLayerDialog : State -> State
 openNewLayerDialog state =
     { state
-        | modal = Just (NewLayerDialog "New Layer")
+        | dialog = Just (NewLayerDialog "New Layer")
     }
 
 
 setNewLayerDialogName : String -> State -> State
 setNewLayerDialogName layerName state =
-    case state.modal of
+    case state.dialog of
         Just (NewLayerDialog _) ->
             { state
-                | modal = Just (NewLayerDialog layerName)
+                | dialog = Just (NewLayerDialog layerName)
             }
 
         _ ->
@@ -225,7 +225,7 @@ openGradientEditorDialog state =
                         (Layer.getMax layer)
             in
             { state
-                | modal = Just (GradientEditorDialog editorState)
+                | dialog = Just (GradientEditorDialog editorState)
             }
 
         _ ->
@@ -234,10 +234,10 @@ openGradientEditorDialog state =
 
 updateGradientEditorDialog : DiscreteGradientEditor.State -> State -> State
 updateGradientEditorDialog dialog state =
-    case state.modal of
+    case state.dialog of
         Just (GradientEditorDialog _) ->
             { state
-                | modal = Just (GradientEditorDialog dialog)
+                | dialog = Just (GradientEditorDialog dialog)
             }
 
         _ ->
@@ -367,23 +367,23 @@ view state =
             [ toolbar state
             , mapPaneView state
             ]
-                ++ (modalView <| getModal state)
+                ++ (dialogView <| getDialog state)
     in
     Html.div [ Html.Attributes.class "page" ]
         content
 
 
 
--- MODAL
+-- DIALOG
 
 
-modalView : Maybe Modal -> List (Html Msg)
-modalView modal =
-    case modal of
+dialogView : Maybe Dialog -> List (Html Msg)
+dialogView dialog =
+    case dialog of
         Just m ->
             [ Html.div [ Html.Attributes.class "mask" ]
-                [ Html.div [ Html.Attributes.class "modal" ]
-                    [ modalContent m
+                [ Html.div [ Html.Attributes.class "dialog" ]
+                    [ dialogContent m
                     ]
                 ]
             ]
@@ -392,9 +392,9 @@ modalView modal =
             []
 
 
-modalContent : Modal -> Html Msg
-modalContent modal =
-    case modal of
+dialogContent : Dialog -> Html Msg
+dialogContent dialog =
+    case dialog of
         NewLayerDialog layerName ->
             newLayerDialog layerName
 
@@ -405,7 +405,7 @@ modalContent modal =
 newLayerDialog : String -> Html Msg
 newLayerDialog layerName =
     Html.div [ Html.Attributes.class "new-layer-dialog" ]
-        [ Html.div [ Html.Attributes.class "new-layer-dialog__header" ] [ Html.text "New Layer" ]
+        [ Html.div [ Html.Attributes.class "dialog__header", Html.Attributes.class "new-layer-dialog__header" ] [ Html.text "New Layer" ]
         , Html.div [ Html.Attributes.class "new-layer-dialog__name-field" ]
             [ Html.div [ Html.Attributes.class "new-layer-dialog__name-label" ] [ Html.text "Name" ]
             , Html.input
@@ -457,30 +457,26 @@ toolbar state =
             mapTuple3 <| getSelectedLayerAndTool state
     in
     Html.div [ Html.Attributes.class "toolbar" ]
-        [ toolbarSection
-            [ toolbarHeader "Layer"
-            , layerField layerIndex state.layers
+        [ toolbarSectionHeader "Layer"
+        , toolbarSectionContents
+            [ layerField layerIndex state.layers
             , minMaxField layer
             , colorGradientField layer
             ]
-        , toolbarSection
-            [ toolbarHeader "Tools"
-            ]
-        , toolbarSection
-            [ toolbarHeader "Brush"
-            ]
+        , toolbarSectionHeader "Tools"
+        , toolbarSectionHeader "Brush"
         ]
 
 
-toolbarSection : List (Html Msg) -> Html Msg
-toolbarSection contents =
-    Html.div [ Html.Attributes.class "toolbar__section" ]
+toolbarSectionContents : List (Html Msg) -> Html Msg
+toolbarSectionContents contents =
+    Html.div [ Html.Attributes.class "toolbar__section-contents" ]
         contents
 
 
-toolbarHeader : String -> Html Msg
-toolbarHeader header =
-    Html.div [ Html.Attributes.class "toolbar__header" ]
+toolbarSectionHeader : String -> Html Msg
+toolbarSectionHeader header =
+    Html.div [ Html.Attributes.class "toolbar__section-header" ]
         [ Html.text header
         ]
 
