@@ -4828,7 +4828,7 @@ var author$project$MapEditor$init = function (_n0) {
 	var windowWidth = _n0.a;
 	var windowHeight = _n0.b;
 	return _Utils_Tuple2(
-		{dialog: elm$core$Maybe$Nothing, height: 10, layerSelection: elm$core$Maybe$Nothing, layers: _List_Nil, name: 'untitled', width: 10, windowHeight: windowHeight, windowWidth: windowWidth},
+		{dialog: elm$core$Maybe$Nothing, layerSelection: elm$core$Maybe$Nothing, layers: _List_Nil, mapHeight: 10, mapWidth: 10, name: 'untitled', windowHeight: windowHeight, windowWidth: windowWidth},
 		elm$core$Platform$Cmd$none);
 };
 var author$project$MapEditor$WindowResize = F2(
@@ -6523,15 +6523,82 @@ var author$project$GridEditor$update = F2(
 				author$project$GridEditor$State,
 				A2(author$project$GridEditor$update_, msg, model)));
 	});
-var author$project$MapEditor$closeDialog = function (state) {
-	return _Utils_update(
-		state,
-		{dialog: elm$core$Maybe$Nothing});
+var author$project$Layer$Layer = function (a) {
+	return {$: 'Layer', a: a};
 };
-var author$project$DiscreteGradient$init = function (stop) {
-	return author$project$DiscreteGradient$DiscreteGradient(
-		_List_fromArray(
-			[stop]));
+var author$project$Grid$toColumn = elm$core$Tuple$first;
+var elm$core$Tuple$second = function (_n0) {
+	var y = _n0.b;
+	return y;
+};
+var author$project$Grid$toRow = elm$core$Tuple$second;
+var elm$core$Bitwise$shiftRightZfBy = _Bitwise_shiftRightZfBy;
+var elm$core$Array$bitMask = 4294967295 >>> (32 - elm$core$Array$shiftStep);
+var elm$core$Bitwise$and = _Bitwise_and;
+var elm$core$Elm$JsArray$unsafeGet = _JsArray_unsafeGet;
+var elm$core$Array$getHelp = F3(
+	function (shift, index, tree) {
+		getHelp:
+		while (true) {
+			var pos = elm$core$Array$bitMask & (index >>> shift);
+			var _n0 = A2(elm$core$Elm$JsArray$unsafeGet, pos, tree);
+			if (_n0.$ === 'SubTree') {
+				var subTree = _n0.a;
+				var $temp$shift = shift - elm$core$Array$shiftStep,
+					$temp$index = index,
+					$temp$tree = subTree;
+				shift = $temp$shift;
+				index = $temp$index;
+				tree = $temp$tree;
+				continue getHelp;
+			} else {
+				var values = _n0.a;
+				return A2(elm$core$Elm$JsArray$unsafeGet, elm$core$Array$bitMask & index, values);
+			}
+		}
+	});
+var elm$core$Bitwise$shiftLeftBy = _Bitwise_shiftLeftBy;
+var elm$core$Array$tailIndex = function (len) {
+	return (len >>> 5) << 5;
+};
+var elm$core$Array$get = F2(
+	function (index, _n0) {
+		var len = _n0.a;
+		var startShift = _n0.b;
+		var tree = _n0.c;
+		var tail = _n0.d;
+		return ((index < 0) || (_Utils_cmp(index, len) > -1)) ? elm$core$Maybe$Nothing : ((_Utils_cmp(
+			index,
+			elm$core$Array$tailIndex(len)) > -1) ? elm$core$Maybe$Just(
+			A2(elm$core$Elm$JsArray$unsafeGet, elm$core$Array$bitMask & index, tail)) : elm$core$Maybe$Just(
+			A3(elm$core$Array$getHelp, startShift, index, tree)));
+	});
+var elm$core$Maybe$andThen = F2(
+	function (callback, maybeValue) {
+		if (maybeValue.$ === 'Just') {
+			var value = maybeValue.a;
+			return callback(value);
+		} else {
+			return elm$core$Maybe$Nothing;
+		}
+	});
+var author$project$Grid$get = F2(
+	function (coord, grid) {
+		return A2(
+			elm$core$Maybe$andThen,
+			elm$core$Array$get(
+				author$project$Grid$toColumn(coord)),
+			A2(
+				elm$core$Array$get,
+				author$project$Grid$toRow(coord),
+				grid));
+	});
+var elm$core$Array$length = function (_n0) {
+	var len = _n0.a;
+	return len;
+};
+var author$project$Grid$height = function (grid) {
+	return elm$core$Array$length(grid);
 };
 var author$project$Grid$rectangle = F3(
 	function (w, h, filler) {
@@ -6547,6 +6614,60 @@ var author$project$Grid$rectangle = F3(
 					});
 			});
 	});
+var author$project$Grid$width = function (grid) {
+	return A2(
+		elm$core$Maybe$withDefault,
+		0,
+		A2(
+			elm$core$Maybe$map,
+			elm$core$Array$length,
+			A2(elm$core$Array$get, 0, grid)));
+};
+var author$project$Layer$resizeGrid_ = F4(
+	function (_default, width, height, grid) {
+		if ((width < 1) || ((height < 1) || (_Utils_eq(
+			width,
+			author$project$Grid$width(grid)) && _Utils_eq(
+			height,
+			author$project$Grid$height(grid))))) {
+			return grid;
+		} else {
+			var filler = F2(
+				function (x, y) {
+					var _n0 = A2(
+						author$project$Grid$get,
+						_Utils_Tuple2(x, y),
+						grid);
+					if (_n0.$ === 'Just') {
+						var cell = _n0.a;
+						return cell;
+					} else {
+						return _default;
+					}
+				});
+			return A3(author$project$Grid$rectangle, width, height, filler);
+		}
+	});
+var author$project$Layer$resizeGrid = F3(
+	function (width, height, _n0) {
+		var inner = _n0.a;
+		return author$project$Layer$Layer(
+			_Utils_update(
+				inner,
+				{
+					grid: A4(author$project$Layer$resizeGrid_, inner.min, width, height, inner.grid)
+				}));
+	});
+var author$project$MapEditor$closeDialog = function (state) {
+	return _Utils_update(
+		state,
+		{dialog: elm$core$Maybe$Nothing});
+};
+var author$project$DiscreteGradient$init = function (stop) {
+	return author$project$DiscreteGradient$DiscreteGradient(
+		_List_fromArray(
+			[stop]));
+};
 var elm$core$Basics$always = F2(
 	function (a, _n0) {
 		return a;
@@ -6562,9 +6683,6 @@ var author$project$Grid$repeat = F3(
 				elm$core$Basics$always,
 				elm$core$Basics$always(occupant)));
 	});
-var author$project$Layer$Layer = function (a) {
-	return {$: 'Layer', a: a};
-};
 var avh4$elm_color$Color$scaleFrom255 = function (c) {
 	return c / 255;
 };
@@ -6594,7 +6712,7 @@ var author$project$Layer$init = F5(
 	});
 var author$project$MapEditor$createLayer = F2(
 	function (name, state) {
-		var newLayer = A5(author$project$Layer$init, name, state.width, state.height, 0, 0);
+		var newLayer = A5(author$project$Layer$init, name, state.mapWidth, state.mapHeight, 0, 0);
 		return _Utils_update(
 			state,
 			{
@@ -6800,93 +6918,6 @@ var author$project$MapEditor$toolbarWidth = 250;
 var author$project$MapEditor$gridEditorPaneWidth = function (windowWidth) {
 	return A2(elm$core$Basics$max, 0, windowWidth - author$project$MapEditor$toolbarWidth);
 };
-var author$project$DiscreteGradientEditor$initModel = F3(
-	function (dg, gradientMin, gradientMax) {
-		return {
-			colorPickerState: simonh1000$elm_colorpicker$ColorPicker$empty,
-			gradient: dg,
-			gradientMax: gradientMax,
-			gradientMin: gradientMin,
-			selectedColor: A2(author$project$DiscreteGradient$getColorAt, gradientMin, dg),
-			selectedValue: gradientMin
-		};
-	});
-var author$project$DiscreteGradientEditor$init = F3(
-	function (dg, gradientMin, gradientMax) {
-		return author$project$DiscreteGradientEditor$State(
-			A3(author$project$DiscreteGradientEditor$initModel, dg, gradientMin, gradientMax));
-	});
-var author$project$Layer$getColorGradient = function (_n0) {
-	var inner = _n0.a;
-	return inner.colorGradient;
-};
-var author$project$Layer$getMax = function (_n0) {
-	var inner = _n0.a;
-	return inner.max;
-};
-var author$project$Layer$getMin = function (_n0) {
-	var inner = _n0.a;
-	return inner.min;
-};
-var author$project$MapEditor$GradientEditorDialog = function (a) {
-	return {$: 'GradientEditorDialog', a: a};
-};
-var author$project$MapEditor$flip = function (f) {
-	return F2(
-		function (b, a) {
-			return A2(f, a, b);
-		});
-};
-var elm$core$Maybe$andThen = F2(
-	function (callback, maybeValue) {
-		if (maybeValue.$ === 'Just') {
-			var value = maybeValue.a;
-			return callback(value);
-		} else {
-			return elm$core$Maybe$Nothing;
-		}
-	});
-var elm_community$list_extra$List$Extra$getAt = F2(
-	function (idx, xs) {
-		return (idx < 0) ? elm$core$Maybe$Nothing : elm$core$List$head(
-			A2(elm$core$List$drop, idx, xs));
-	});
-var author$project$MapEditor$getSelectedLayer = function (state) {
-	return A2(
-		elm$core$Maybe$andThen,
-		A2(author$project$MapEditor$flip, elm_community$list_extra$List$Extra$getAt, state.layers),
-		author$project$MapEditor$getSelectedLayerIndex(state));
-};
-var author$project$MapEditor$openGradientEditorDialog = function (state) {
-	var _n0 = author$project$MapEditor$getSelectedLayer(state);
-	if (_n0.$ === 'Just') {
-		var layer = _n0.a;
-		var editorState = A3(
-			author$project$DiscreteGradientEditor$init,
-			author$project$Layer$getColorGradient(layer),
-			author$project$Layer$getMin(layer),
-			author$project$Layer$getMax(layer));
-		return _Utils_update(
-			state,
-			{
-				dialog: elm$core$Maybe$Just(
-					author$project$MapEditor$GradientEditorDialog(editorState))
-			});
-	} else {
-		return state;
-	}
-};
-var author$project$MapEditor$NewLayerDialog = function (a) {
-	return {$: 'NewLayerDialog', a: a};
-};
-var author$project$MapEditor$openNewLayerDialog = function (state) {
-	return _Utils_update(
-		state,
-		{
-			dialog: elm$core$Maybe$Just(
-				author$project$MapEditor$NewLayerDialog('New Layer'))
-		});
-};
 var author$project$MapEditor$Pan = {$: 'Pan'};
 var elm$core$Elm$JsArray$map = _JsArray_map;
 var elm$core$Array$map = F2(
@@ -6938,9 +6969,21 @@ var author$project$GridEditor$init = F6(
 		return author$project$GridEditor$State(
 			{cellMax: cellMax, cellMin: cellMin, gradient: gradient, grid: g, paneHeight: paneHeight, paneWidth: paneWidth});
 	});
+var author$project$Layer$getColorGradient = function (_n0) {
+	var inner = _n0.a;
+	return inner.colorGradient;
+};
 var author$project$Layer$getGrid = function (_n0) {
 	var inner = _n0.a;
 	return inner.grid;
+};
+var author$project$Layer$getMax = function (_n0) {
+	var inner = _n0.a;
+	return inner.max;
+};
+var author$project$Layer$getMin = function (_n0) {
+	var inner = _n0.a;
+	return inner.min;
 };
 var author$project$MapEditor$initGridEditor = F3(
 	function (layer, paneWidth, paneHeight) {
@@ -6953,35 +6996,96 @@ var author$project$MapEditor$initGridEditor = F3(
 			paneWidth,
 			paneHeight);
 	});
+var elm_community$list_extra$List$Extra$getAt = F2(
+	function (idx, xs) {
+		return (idx < 0) ? elm$core$Maybe$Nothing : elm$core$List$head(
+			A2(elm$core$List$drop, idx, xs));
+	});
+var author$project$MapEditor$initLayerSelection = F4(
+	function (layers, selectedIndex, windowWidth, windowHeight) {
+		return A2(
+			elm$core$Maybe$map,
+			function (layer) {
+				return {
+					gridEditor: A3(
+						author$project$MapEditor$initGridEditor,
+						layer,
+						author$project$MapEditor$gridEditorPaneWidth(windowWidth),
+						author$project$MapEditor$gridEditorPaneWidth(windowHeight)),
+					layerIndex: selectedIndex,
+					tool: author$project$MapEditor$Pan
+				};
+			},
+			A2(elm_community$list_extra$List$Extra$getAt, selectedIndex, layers));
+	});
+var author$project$DiscreteGradientEditor$initModel = F3(
+	function (dg, gradientMin, gradientMax) {
+		return {
+			colorPickerState: simonh1000$elm_colorpicker$ColorPicker$empty,
+			gradient: dg,
+			gradientMax: gradientMax,
+			gradientMin: gradientMin,
+			selectedColor: A2(author$project$DiscreteGradient$getColorAt, gradientMin, dg),
+			selectedValue: gradientMin
+		};
+	});
+var author$project$DiscreteGradientEditor$init = F3(
+	function (dg, gradientMin, gradientMax) {
+		return author$project$DiscreteGradientEditor$State(
+			A3(author$project$DiscreteGradientEditor$initModel, dg, gradientMin, gradientMax));
+	});
+var author$project$MapEditor$GradientEditorDialog = function (a) {
+	return {$: 'GradientEditorDialog', a: a};
+};
+var author$project$MapEditor$flip = function (f) {
+	return F2(
+		function (b, a) {
+			return A2(f, a, b);
+		});
+};
+var author$project$MapEditor$getSelectedLayer = function (state) {
+	return A2(
+		elm$core$Maybe$andThen,
+		A2(author$project$MapEditor$flip, elm_community$list_extra$List$Extra$getAt, state.layers),
+		author$project$MapEditor$getSelectedLayerIndex(state));
+};
+var author$project$MapEditor$openGradientEditorDialog = function (state) {
+	var _n0 = author$project$MapEditor$getSelectedLayer(state);
+	if (_n0.$ === 'Just') {
+		var layer = _n0.a;
+		var editorState = A3(
+			author$project$DiscreteGradientEditor$init,
+			author$project$Layer$getColorGradient(layer),
+			author$project$Layer$getMin(layer),
+			author$project$Layer$getMax(layer));
+		return _Utils_update(
+			state,
+			{
+				dialog: elm$core$Maybe$Just(
+					author$project$MapEditor$GradientEditorDialog(editorState))
+			});
+	} else {
+		return state;
+	}
+};
+var author$project$MapEditor$NewLayerDialog = function (a) {
+	return {$: 'NewLayerDialog', a: a};
+};
+var author$project$MapEditor$openNewLayerDialog = function (state) {
+	return _Utils_update(
+		state,
+		{
+			dialog: elm$core$Maybe$Just(
+				author$project$MapEditor$NewLayerDialog('New Layer'))
+		});
+};
 var author$project$MapEditor$selectLayer = F2(
 	function (index, state) {
-		if (index.$ === 'Nothing') {
-			return _Utils_update(
-				state,
-				{layerSelection: elm$core$Maybe$Nothing});
-		} else {
-			var i = index.a;
-			var _n1 = A2(elm_community$list_extra$List$Extra$getAt, i, state.layers);
-			if (_n1.$ === 'Nothing') {
-				return state;
-			} else {
-				var layer = _n1.a;
-				return _Utils_update(
-					state,
-					{
-						layerSelection: elm$core$Maybe$Just(
-							{
-								gridEditor: A3(
-									author$project$MapEditor$initGridEditor,
-									layer,
-									author$project$MapEditor$gridEditorPaneWidth(state.windowWidth),
-									author$project$MapEditor$gridEditorPaneWidth(state.windowHeight)),
-								layerIndex: i,
-								tool: author$project$MapEditor$Pan
-							})
-					});
-			}
-		}
+		return _Utils_update(
+			state,
+			{
+				layerSelection: A4(author$project$MapEditor$initLayerSelection, state.layers, index, state.windowWidth, state.windowHeight)
+			});
 	});
 var author$project$MapEditor$setNewLayerDialogName = F2(
 	function (layerName, state) {
@@ -7147,105 +7251,6 @@ var author$project$Layer$applyFloorToGrid = function (flr) {
 	return author$project$Grid$map(
 		elm$core$Basics$max(flr));
 };
-var author$project$Grid$toColumn = elm$core$Tuple$first;
-var elm$core$Tuple$second = function (_n0) {
-	var y = _n0.b;
-	return y;
-};
-var author$project$Grid$toRow = elm$core$Tuple$second;
-var elm$core$Bitwise$shiftRightZfBy = _Bitwise_shiftRightZfBy;
-var elm$core$Array$bitMask = 4294967295 >>> (32 - elm$core$Array$shiftStep);
-var elm$core$Bitwise$and = _Bitwise_and;
-var elm$core$Elm$JsArray$unsafeGet = _JsArray_unsafeGet;
-var elm$core$Array$getHelp = F3(
-	function (shift, index, tree) {
-		getHelp:
-		while (true) {
-			var pos = elm$core$Array$bitMask & (index >>> shift);
-			var _n0 = A2(elm$core$Elm$JsArray$unsafeGet, pos, tree);
-			if (_n0.$ === 'SubTree') {
-				var subTree = _n0.a;
-				var $temp$shift = shift - elm$core$Array$shiftStep,
-					$temp$index = index,
-					$temp$tree = subTree;
-				shift = $temp$shift;
-				index = $temp$index;
-				tree = $temp$tree;
-				continue getHelp;
-			} else {
-				var values = _n0.a;
-				return A2(elm$core$Elm$JsArray$unsafeGet, elm$core$Array$bitMask & index, values);
-			}
-		}
-	});
-var elm$core$Bitwise$shiftLeftBy = _Bitwise_shiftLeftBy;
-var elm$core$Array$tailIndex = function (len) {
-	return (len >>> 5) << 5;
-};
-var elm$core$Array$get = F2(
-	function (index, _n0) {
-		var len = _n0.a;
-		var startShift = _n0.b;
-		var tree = _n0.c;
-		var tail = _n0.d;
-		return ((index < 0) || (_Utils_cmp(index, len) > -1)) ? elm$core$Maybe$Nothing : ((_Utils_cmp(
-			index,
-			elm$core$Array$tailIndex(len)) > -1) ? elm$core$Maybe$Just(
-			A2(elm$core$Elm$JsArray$unsafeGet, elm$core$Array$bitMask & index, tail)) : elm$core$Maybe$Just(
-			A3(elm$core$Array$getHelp, startShift, index, tree)));
-	});
-var author$project$Grid$get = F2(
-	function (coord, grid) {
-		return A2(
-			elm$core$Maybe$andThen,
-			elm$core$Array$get(
-				author$project$Grid$toColumn(coord)),
-			A2(
-				elm$core$Array$get,
-				author$project$Grid$toRow(coord),
-				grid));
-	});
-var elm$core$Array$length = function (_n0) {
-	var len = _n0.a;
-	return len;
-};
-var author$project$Grid$height = function (grid) {
-	return elm$core$Array$length(grid);
-};
-var author$project$Grid$width = function (grid) {
-	return A2(
-		elm$core$Maybe$withDefault,
-		0,
-		A2(
-			elm$core$Maybe$map,
-			elm$core$Array$length,
-			A2(elm$core$Array$get, 0, grid)));
-};
-var author$project$Layer$resizeGrid_ = F4(
-	function (_default, width, height, grid) {
-		if ((width < 1) || ((height < 1) || (_Utils_eq(
-			width,
-			author$project$Grid$width(grid)) && _Utils_eq(
-			height,
-			author$project$Grid$height(grid))))) {
-			return grid;
-		} else {
-			var filler = F2(
-				function (x, y) {
-					var _n0 = A2(
-						author$project$Grid$get,
-						_Utils_Tuple2(x, y),
-						grid);
-					if (_n0.$ === 'Just') {
-						var cell = _n0.a;
-						return cell;
-					} else {
-						return _default;
-					}
-				});
-			return A3(author$project$Grid$rectangle, width, height, filler);
-		}
-	});
 var author$project$Layer$setGrid = F2(
 	function (grid, _n0) {
 		var inner = _n0.a;
@@ -7323,9 +7328,59 @@ var author$project$MapEditor$update_ = F2(
 					_Utils_update(
 						state,
 						{windowHeight: height, windowWidth: width}));
+			case 'SetMapWidth':
+				var w = msg.a;
+				return (w > 0) ? function (newState) {
+					return _Utils_update(
+						newState,
+						{
+							layerSelection: A2(
+								elm$core$Maybe$andThen,
+								function (i) {
+									return A4(author$project$MapEditor$initLayerSelection, newState.layers, i, newState.windowWidth, newState.windowHeight);
+								},
+								author$project$MapEditor$getSelectedLayerIndex(state))
+						});
+				}(
+					_Utils_update(
+						state,
+						{
+							layers: A2(
+								elm$core$List$map,
+								A2(author$project$Layer$resizeGrid, w, state.mapHeight),
+								state.layers),
+							mapWidth: w
+						})) : state;
+			case 'SetMapHeight':
+				var h = msg.a;
+				return (h > 0) ? function (newState) {
+					return _Utils_update(
+						newState,
+						{
+							layerSelection: A2(
+								elm$core$Maybe$andThen,
+								function (i) {
+									return A4(author$project$MapEditor$initLayerSelection, newState.layers, i, newState.windowWidth, newState.windowHeight);
+								},
+								author$project$MapEditor$getSelectedLayerIndex(state))
+						});
+				}(
+					_Utils_update(
+						state,
+						{
+							layers: A2(
+								elm$core$List$map,
+								A2(author$project$Layer$resizeGrid, state.mapWidth, h),
+								state.layers),
+							mapHeight: h
+						})) : state;
 			case 'SelectLayer':
 				var index = msg.a;
 				return A2(author$project$MapEditor$selectLayer, index, state);
+			case 'UnselectLayer':
+				return _Utils_update(
+					state,
+					{layerSelection: elm$core$Maybe$Nothing});
 			case 'DeleteSelectedLayer':
 				return author$project$MapEditor$deleteSelectedLayer(state);
 			case 'OpenNewLayerDialog':
@@ -7342,38 +7397,27 @@ var author$project$MapEditor$update_ = F2(
 					return author$project$MapEditor$closeDialog(
 						A2(
 							author$project$MapEditor$selectLayer,
-							elm$core$Maybe$Just(
-								author$project$MapEditor$getLayerCount(state)),
+							author$project$MapEditor$getLayerCount(state),
 							A2(author$project$MapEditor$createLayer, layerName, state)));
 				} else {
 					return state;
 				}
 			case 'SetLayerMin':
 				var newMin = msg.a;
-				if (newMin.$ === 'Just') {
-					var m = newMin.a;
-					return A2(author$project$MapEditor$updateSelectedLayerMin, m, state);
-				} else {
-					return state;
-				}
+				return A2(author$project$MapEditor$updateSelectedLayerMin, newMin, state);
 			case 'SetLayerMax':
 				var newMax = msg.a;
-				if (newMax.$ === 'Just') {
-					var m = newMax.a;
-					return A2(author$project$MapEditor$updateSelectedLayerMax, m, state);
-				} else {
-					return state;
-				}
+				return A2(author$project$MapEditor$updateSelectedLayerMax, newMax, state);
 			case 'OpenGradientEditorDialog':
 				return author$project$MapEditor$openGradientEditorDialog(state);
 			case 'GradientEditorMsg':
 				var editorMsg = msg.a;
-				var _n4 = author$project$MapEditor$getDialog(state);
-				if ((_n4.$ === 'Just') && (_n4.a.$ === 'GradientEditorDialog')) {
-					var dialog = _n4.a.a;
-					var _n5 = A2(author$project$DiscreteGradientEditor$update, editorMsg, dialog);
-					var newDialog = _n5.a;
-					var output = _n5.b;
+				var _n2 = author$project$MapEditor$getDialog(state);
+				if ((_n2.$ === 'Just') && (_n2.a.$ === 'GradientEditorDialog')) {
+					var dialog = _n2.a.a;
+					var _n3 = A2(author$project$DiscreteGradientEditor$update, editorMsg, dialog);
+					var newDialog = _n3.a;
+					var output = _n3.b;
 					switch (output.$) {
 						case 'EditInProgress':
 							return A2(author$project$MapEditor$updateGradientEditorDialog, newDialog, state);
@@ -7390,18 +7434,20 @@ var author$project$MapEditor$update_ = F2(
 				} else {
 					return state;
 				}
-			default:
+			case 'GridEditorMsg':
 				var editorMsg = msg.a;
-				var _n7 = author$project$MapEditor$getGridEditor(state);
-				if (_n7.$ === 'Just') {
-					var gridEditor = _n7.a;
-					var _n8 = A2(author$project$GridEditor$update, editorMsg, gridEditor);
-					var newGridEditor = _n8.a;
-					var grid = _n8.b;
+				var _n5 = author$project$MapEditor$getGridEditor(state);
+				if (_n5.$ === 'Just') {
+					var gridEditor = _n5.a;
+					var _n6 = A2(author$project$GridEditor$update, editorMsg, gridEditor);
+					var newGridEditor = _n6.a;
+					var grid = _n6.b;
 					return A2(author$project$MapEditor$updateSelectedLayerGrid, grid, state);
 				} else {
 					return state;
 				}
+			default:
+				return state;
 		}
 	});
 var author$project$MapEditor$update = F2(
@@ -10050,7 +10096,16 @@ var author$project$MapEditor$layerFieldOptions = function (selectedIndex) {
 var author$project$MapEditor$SelectLayer = function (a) {
 	return {$: 'SelectLayer', a: a};
 };
-var author$project$MapEditor$toSelectLayerMsg = A2(elm$core$Basics$composeL, author$project$MapEditor$SelectLayer, elm$core$String$toInt);
+var author$project$MapEditor$UnselectLayer = {$: 'UnselectLayer'};
+var author$project$MapEditor$toSelectLayerMsg = function (s) {
+	return A2(
+		elm$core$Maybe$withDefault,
+		author$project$MapEditor$UnselectLayer,
+		A2(
+			elm$core$Maybe$map,
+			author$project$MapEditor$SelectLayer,
+			elm$core$String$toInt(s)));
+};
 var elm$html$Html$select = _VirtualDom_node('select');
 var elm_community$maybe_extra$Maybe$Extra$isNothing = function (m) {
 	if (m.$ === 'Nothing') {
@@ -10117,7 +10172,18 @@ var author$project$MapEditor$enabledMinMaxFieldInput = F2(
 var author$project$MapEditor$SetLayerMax = function (a) {
 	return {$: 'SetLayerMax', a: a};
 };
-var author$project$MapEditor$toSetLayerMaxMsg = A2(elm$core$Basics$composeL, author$project$MapEditor$SetLayerMax, elm$core$String$toInt);
+var author$project$MapEditor$NoOp = {$: 'NoOp'};
+var author$project$MapEditor$stringToIntMsgOrNoOp = F2(
+	function (toMsg, s) {
+		return A2(
+			elm$core$Maybe$withDefault,
+			author$project$MapEditor$NoOp,
+			A2(
+				elm$core$Maybe$map,
+				toMsg,
+				elm$core$String$toInt(s)));
+	});
+var author$project$MapEditor$toSetLayerMaxMsg = author$project$MapEditor$stringToIntMsgOrNoOp(author$project$MapEditor$SetLayerMax);
 var author$project$MapEditor$maxInput = function (val) {
 	if (val.$ === 'Just') {
 		var v = val.a;
@@ -10129,7 +10195,7 @@ var author$project$MapEditor$maxInput = function (val) {
 var author$project$MapEditor$SetLayerMin = function (a) {
 	return {$: 'SetLayerMin', a: a};
 };
-var author$project$MapEditor$toSetLayerMinMsg = A2(elm$core$Basics$composeL, author$project$MapEditor$SetLayerMin, elm$core$String$toInt);
+var author$project$MapEditor$toSetLayerMinMsg = author$project$MapEditor$stringToIntMsgOrNoOp(author$project$MapEditor$SetLayerMin);
 var author$project$MapEditor$minInput = function (val) {
 	if (val.$ === 'Just') {
 		var v = val.a;
@@ -10196,6 +10262,64 @@ var author$project$MapEditor$toolbarSectionHeader = function (header) {
 				elm$html$Html$text(header)
 			]));
 };
+var author$project$MapEditor$SetMapHeight = function (a) {
+	return {$: 'SetMapHeight', a: a};
+};
+var author$project$MapEditor$toSetMapHeight = author$project$MapEditor$stringToIntMsgOrNoOp(author$project$MapEditor$SetMapHeight);
+var author$project$MapEditor$SetMapWidth = function (a) {
+	return {$: 'SetMapWidth', a: a};
+};
+var author$project$MapEditor$toSetMapWidth = author$project$MapEditor$stringToIntMsgOrNoOp(author$project$MapEditor$SetMapWidth);
+var author$project$MapEditor$widthHeightFieldInput = F2(
+	function (val, toMsg) {
+		return A2(
+			elm$html$Html$input,
+			_List_fromArray(
+				[
+					elm$html$Html$Attributes$class('width-height-field__input'),
+					elm$html$Html$Attributes$type_('number'),
+					elm$html$Html$Attributes$value(
+					elm$core$String$fromInt(val)),
+					elm$html$Html$Events$onInput(toMsg)
+				]),
+			_List_Nil);
+	});
+var author$project$MapEditor$widthHeightFieldInputSeparator = A2(
+	elm$html$Html$div,
+	_List_fromArray(
+		[
+			elm$html$Html$Attributes$class('width-height-field__input-separator')
+		]),
+	_List_fromArray(
+		[
+			elm$html$Html$text('/')
+		]));
+var author$project$MapEditor$widthHeightFieldLabel = A2(
+	elm$html$Html$div,
+	_List_fromArray(
+		[
+			elm$html$Html$Attributes$class('width-height-field__label')
+		]),
+	_List_fromArray(
+		[
+			elm$html$Html$text('Width / Height')
+		]));
+var author$project$MapEditor$widthHeightField = F2(
+	function (mapWidth, mapHeight) {
+		return A2(
+			elm$html$Html$div,
+			_List_fromArray(
+				[
+					elm$html$Html$Attributes$class('width-height-field')
+				]),
+			_List_fromArray(
+				[
+					author$project$MapEditor$widthHeightFieldLabel,
+					A2(author$project$MapEditor$widthHeightFieldInput, mapWidth, author$project$MapEditor$toSetMapWidth),
+					author$project$MapEditor$widthHeightFieldInputSeparator,
+					A2(author$project$MapEditor$widthHeightFieldInput, mapHeight, author$project$MapEditor$toSetMapHeight)
+				]));
+	});
 var author$project$MapEditor$toolbar = function (state) {
 	var tool = author$project$MapEditor$getSelectedTool(state);
 	var layerIndex = author$project$MapEditor$getSelectedLayerIndex(state);
@@ -10212,6 +10336,12 @@ var author$project$MapEditor$toolbar = function (state) {
 			]),
 		_List_fromArray(
 			[
+				author$project$MapEditor$toolbarSectionHeader('Map'),
+				author$project$MapEditor$toolbarSectionContents(
+				_List_fromArray(
+					[
+						A2(author$project$MapEditor$widthHeightField, state.mapWidth, state.mapHeight)
+					])),
 				author$project$MapEditor$toolbarSectionHeader('Layer'),
 				author$project$MapEditor$toolbarSectionContents(
 				_List_fromArray(
