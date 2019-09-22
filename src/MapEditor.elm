@@ -69,25 +69,25 @@ init ( windowWidth, windowHeight ) =
                 (gridEditorPaneHeight windowHeight)
     in
     { name = "untitled"
-      , mapWidth = defaultMapWidth
-      , mapHeight = defaultMapHeight
-      , layerSelection = initLayerSelection
-      , gridEditor = initGridEditor
-      , dialog = Nothing
-      , windowWidth = windowWidth
-      , windowHeight = windowHeight
-      }
+    , mapWidth = defaultMapWidth
+    , mapHeight = defaultMapHeight
+    , layerSelection = initLayerSelection
+    , gridEditor = initGridEditor
+    , dialog = Nothing
+    , windowWidth = windowWidth
+    , windowHeight = windowHeight
+    }
 
 
 makeGridEditor : Layer -> Int -> Int -> GridEditor.State
 makeGridEditor layer paneWidth paneHeight =
     GridEditor.init
         (Layer.getGrid layer)
-        (Layer.getMin layer)
-        (Layer.getMax layer)
+        -- (Layer.getMin layer)
+        -- (Layer.getMax layer)
         (Layer.getColorGradient layer)
-        paneWidth
-        paneHeight
+        (toFloat paneWidth)
+        (toFloat paneHeight)
 
 
 {-| Default name for new layers.
@@ -117,7 +117,7 @@ makeLayerWithDefaultMinMax name width height =
 
 
 type Msg
-    = WindowResize Int Int
+    = ElapsedTime Float
     | SetMapWidth Int
     | SetMapHeight Int
     | SelectLayer Int
@@ -137,15 +137,9 @@ type Msg
 update : Msg -> State -> State
 update msg state =
     case msg of
-        WindowResize width height ->
+        ElapsedTime t ->
             { state
-                | windowWidth = width
-                , windowHeight = height
-                , gridEditor =
-                    GridEditor.updatePaneSize
-                        (gridEditorPaneWidth width)
-                        (gridEditorPaneHeight height)
-                        state.gridEditor
+                | gridEditor = GridEditor.updateWithElapsedTime t state.gridEditor
             }
 
         SetMapWidth w ->
@@ -288,7 +282,7 @@ update msg state =
 
 subscriptions : State -> Sub Msg
 subscriptions _ =
-    Browser.Events.onResize WindowResize
+    Browser.Events.onAnimationFrameDelta ElapsedTime
 
 
 toSetMapWidth : String -> Msg
@@ -333,8 +327,8 @@ loadSelecteLayerIntoGridEditor state =
     { state
         | gridEditor =
             state.gridEditor
-                |> GridEditor.updateCellMin (Layer.getMin layer)
-                |> GridEditor.updateCellMax (Layer.getMax layer)
+                -- |> GridEditor.updateCellMin (Layer.getMin layer)
+                -- |> GridEditor.updateCellMax (Layer.getMax layer)
                 |> GridEditor.updateGrid (Layer.getGrid layer)
                 |> GridEditor.updateGradient (Layer.getColorGradient layer)
     }
@@ -704,7 +698,6 @@ simpleGradientCell gradient val =
 
 --------------------------------------------------------------------------------
 -- LAYOUT CALCULATIONS
--- TODO: Maybe remove soon
 
 
 toolbarWidth : Int

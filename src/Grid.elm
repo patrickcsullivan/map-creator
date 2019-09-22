@@ -3,11 +3,11 @@ module Grid exposing
     , rectangle, square, repeat, repeatSquare
     , set, get, row, column
     , toColumn, toRow, toCoordinate
-    , height, map, width
+    , height, map, toListWithCoordinates, width
     )
 
 {-| Copied from <https://github.com/jreut/elm-grid/blob/1.0.2/src/Grid.elm> with
-some small changes to be compatible with Elm 0.19.
+some small changes and additions
 
 This library provides a data type to represent two-dimensional arrays.
 
@@ -195,3 +195,12 @@ mapWithCoordinate f grid =
     Array.indexedMap
         (\y -> Array.indexedMap (\x -> f (coordinate x y)))
         grid
+
+
+toListWithCoordinates : Grid a -> List ( ( Int, Int ), a )
+toListWithCoordinates grid =
+    grid
+        |> mapWithCoordinate (\coord cell -> ( coord, cell ))
+        |> Array.map Array.toList
+        |> Array.toList
+        |> List.concat

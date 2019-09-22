@@ -853,6 +853,197 @@ var _Basics_xor = F2(function(a, b) { return a !== b; });
 
 
 
+// TASKS
+
+function _Scheduler_succeed(value)
+{
+	return {
+		$: 0,
+		a: value
+	};
+}
+
+function _Scheduler_fail(error)
+{
+	return {
+		$: 1,
+		a: error
+	};
+}
+
+function _Scheduler_binding(callback)
+{
+	return {
+		$: 2,
+		b: callback,
+		c: null
+	};
+}
+
+var _Scheduler_andThen = F2(function(callback, task)
+{
+	return {
+		$: 3,
+		b: callback,
+		d: task
+	};
+});
+
+var _Scheduler_onError = F2(function(callback, task)
+{
+	return {
+		$: 4,
+		b: callback,
+		d: task
+	};
+});
+
+function _Scheduler_receive(callback)
+{
+	return {
+		$: 5,
+		b: callback
+	};
+}
+
+
+// PROCESSES
+
+var _Scheduler_guid = 0;
+
+function _Scheduler_rawSpawn(task)
+{
+	var proc = {
+		$: 0,
+		e: _Scheduler_guid++,
+		f: task,
+		g: null,
+		h: []
+	};
+
+	_Scheduler_enqueue(proc);
+
+	return proc;
+}
+
+function _Scheduler_spawn(task)
+{
+	return _Scheduler_binding(function(callback) {
+		callback(_Scheduler_succeed(_Scheduler_rawSpawn(task)));
+	});
+}
+
+function _Scheduler_rawSend(proc, msg)
+{
+	proc.h.push(msg);
+	_Scheduler_enqueue(proc);
+}
+
+var _Scheduler_send = F2(function(proc, msg)
+{
+	return _Scheduler_binding(function(callback) {
+		_Scheduler_rawSend(proc, msg);
+		callback(_Scheduler_succeed(_Utils_Tuple0));
+	});
+});
+
+function _Scheduler_kill(proc)
+{
+	return _Scheduler_binding(function(callback) {
+		var task = proc.f;
+		if (task.$ === 2 && task.c)
+		{
+			task.c();
+		}
+
+		proc.f = null;
+
+		callback(_Scheduler_succeed(_Utils_Tuple0));
+	});
+}
+
+
+/* STEP PROCESSES
+
+type alias Process =
+  { $ : tag
+  , id : unique_id
+  , root : Task
+  , stack : null | { $: SUCCEED | FAIL, a: callback, b: stack }
+  , mailbox : [msg]
+  }
+
+*/
+
+
+var _Scheduler_working = false;
+var _Scheduler_queue = [];
+
+
+function _Scheduler_enqueue(proc)
+{
+	_Scheduler_queue.push(proc);
+	if (_Scheduler_working)
+	{
+		return;
+	}
+	_Scheduler_working = true;
+	while (proc = _Scheduler_queue.shift())
+	{
+		_Scheduler_step(proc);
+	}
+	_Scheduler_working = false;
+}
+
+
+function _Scheduler_step(proc)
+{
+	while (proc.f)
+	{
+		var rootTag = proc.f.$;
+		if (rootTag === 0 || rootTag === 1)
+		{
+			while (proc.g && proc.g.$ !== rootTag)
+			{
+				proc.g = proc.g.i;
+			}
+			if (!proc.g)
+			{
+				return;
+			}
+			proc.f = proc.g.b(proc.f.a);
+			proc.g = proc.g.i;
+		}
+		else if (rootTag === 2)
+		{
+			proc.f.c = proc.f.b(function(newRoot) {
+				proc.f = newRoot;
+				_Scheduler_enqueue(proc);
+			});
+			return;
+		}
+		else if (rootTag === 5)
+		{
+			if (proc.h.length === 0)
+			{
+				return;
+			}
+			proc.f = proc.f.b(proc.h.shift());
+		}
+		else // if (rootTag === 3 || rootTag === 4)
+		{
+			proc.g = {
+				$: rootTag === 3 ? 0 : 1,
+				b: proc.f.b,
+				i: proc.g
+			};
+			proc.f = proc.f.d;
+		}
+	}
+}
+
+
+
 function _Char_toCode(char)
 {
 	var code = char.charCodeAt(0);
@@ -1641,197 +1832,6 @@ function _Json_addEntry(func)
 }
 
 var _Json_encodeNull = _Json_wrap(null);
-
-
-
-// TASKS
-
-function _Scheduler_succeed(value)
-{
-	return {
-		$: 0,
-		a: value
-	};
-}
-
-function _Scheduler_fail(error)
-{
-	return {
-		$: 1,
-		a: error
-	};
-}
-
-function _Scheduler_binding(callback)
-{
-	return {
-		$: 2,
-		b: callback,
-		c: null
-	};
-}
-
-var _Scheduler_andThen = F2(function(callback, task)
-{
-	return {
-		$: 3,
-		b: callback,
-		d: task
-	};
-});
-
-var _Scheduler_onError = F2(function(callback, task)
-{
-	return {
-		$: 4,
-		b: callback,
-		d: task
-	};
-});
-
-function _Scheduler_receive(callback)
-{
-	return {
-		$: 5,
-		b: callback
-	};
-}
-
-
-// PROCESSES
-
-var _Scheduler_guid = 0;
-
-function _Scheduler_rawSpawn(task)
-{
-	var proc = {
-		$: 0,
-		e: _Scheduler_guid++,
-		f: task,
-		g: null,
-		h: []
-	};
-
-	_Scheduler_enqueue(proc);
-
-	return proc;
-}
-
-function _Scheduler_spawn(task)
-{
-	return _Scheduler_binding(function(callback) {
-		callback(_Scheduler_succeed(_Scheduler_rawSpawn(task)));
-	});
-}
-
-function _Scheduler_rawSend(proc, msg)
-{
-	proc.h.push(msg);
-	_Scheduler_enqueue(proc);
-}
-
-var _Scheduler_send = F2(function(proc, msg)
-{
-	return _Scheduler_binding(function(callback) {
-		_Scheduler_rawSend(proc, msg);
-		callback(_Scheduler_succeed(_Utils_Tuple0));
-	});
-});
-
-function _Scheduler_kill(proc)
-{
-	return _Scheduler_binding(function(callback) {
-		var task = proc.f;
-		if (task.$ === 2 && task.c)
-		{
-			task.c();
-		}
-
-		proc.f = null;
-
-		callback(_Scheduler_succeed(_Utils_Tuple0));
-	});
-}
-
-
-/* STEP PROCESSES
-
-type alias Process =
-  { $ : tag
-  , id : unique_id
-  , root : Task
-  , stack : null | { $: SUCCEED | FAIL, a: callback, b: stack }
-  , mailbox : [msg]
-  }
-
-*/
-
-
-var _Scheduler_working = false;
-var _Scheduler_queue = [];
-
-
-function _Scheduler_enqueue(proc)
-{
-	_Scheduler_queue.push(proc);
-	if (_Scheduler_working)
-	{
-		return;
-	}
-	_Scheduler_working = true;
-	while (proc = _Scheduler_queue.shift())
-	{
-		_Scheduler_step(proc);
-	}
-	_Scheduler_working = false;
-}
-
-
-function _Scheduler_step(proc)
-{
-	while (proc.f)
-	{
-		var rootTag = proc.f.$;
-		if (rootTag === 0 || rootTag === 1)
-		{
-			while (proc.g && proc.g.$ !== rootTag)
-			{
-				proc.g = proc.g.i;
-			}
-			if (!proc.g)
-			{
-				return;
-			}
-			proc.f = proc.g.b(proc.f.a);
-			proc.g = proc.g.i;
-		}
-		else if (rootTag === 2)
-		{
-			proc.f.c = proc.f.b(function(newRoot) {
-				proc.f = newRoot;
-				_Scheduler_enqueue(proc);
-			});
-			return;
-		}
-		else if (rootTag === 5)
-		{
-			if (proc.h.length === 0)
-			{
-				return;
-			}
-			proc.f = proc.f.b(proc.h.shift());
-		}
-		else // if (rootTag === 3 || rootTag === 4)
-		{
-			proc.g = {
-				$: rootTag === 3 ? 0 : 1,
-				b: proc.f.b,
-				i: proc.g
-			};
-			proc.f = proc.f.d;
-		}
-	}
-}
 
 
 
@@ -4347,6 +4347,1662 @@ var _Bitwise_shiftRightZfBy = F2(function(offset, a)
 {
 	return a >>> offset;
 });
+
+
+/*
+ * Copyright (c) 2010 Mozilla Corporation
+ * Copyright (c) 2010 Vladimir Vukicevic
+ * Copyright (c) 2013 John Mayer
+ * Copyright (c) 2018 Andrey Kuzmin
+ *
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+// Vector2
+
+var _MJS_v2 = F2(function(x, y) {
+    return new Float64Array([x, y]);
+});
+
+var _MJS_v2getX = function(a) {
+    return a[0];
+};
+
+var _MJS_v2getY = function(a) {
+    return a[1];
+};
+
+var _MJS_v2setX = F2(function(x, a) {
+    return new Float64Array([x, a[1]]);
+});
+
+var _MJS_v2setY = F2(function(y, a) {
+    return new Float64Array([a[0], y]);
+});
+
+var _MJS_v2toRecord = function(a) {
+    return { x: a[0], y: a[1] };
+};
+
+var _MJS_v2fromRecord = function(r) {
+    return new Float64Array([r.x, r.y]);
+};
+
+var _MJS_v2add = F2(function(a, b) {
+    var r = new Float64Array(2);
+    r[0] = a[0] + b[0];
+    r[1] = a[1] + b[1];
+    return r;
+});
+
+var _MJS_v2sub = F2(function(a, b) {
+    var r = new Float64Array(2);
+    r[0] = a[0] - b[0];
+    r[1] = a[1] - b[1];
+    return r;
+});
+
+var _MJS_v2negate = function(a) {
+    var r = new Float64Array(2);
+    r[0] = -a[0];
+    r[1] = -a[1];
+    return r;
+};
+
+var _MJS_v2direction = F2(function(a, b) {
+    var r = new Float64Array(2);
+    r[0] = a[0] - b[0];
+    r[1] = a[1] - b[1];
+    var im = 1.0 / _MJS_v2lengthLocal(r);
+    r[0] = r[0] * im;
+    r[1] = r[1] * im;
+    return r;
+});
+
+function _MJS_v2lengthLocal(a) {
+    return Math.sqrt(a[0] * a[0] + a[1] * a[1]);
+}
+var _MJS_v2length = _MJS_v2lengthLocal;
+
+var _MJS_v2lengthSquared = function(a) {
+    return a[0] * a[0] + a[1] * a[1];
+};
+
+var _MJS_v2distance = F2(function(a, b) {
+    var dx = a[0] - b[0];
+    var dy = a[1] - b[1];
+    return Math.sqrt(dx * dx + dy * dy);
+});
+
+var _MJS_v2distanceSquared = F2(function(a, b) {
+    var dx = a[0] - b[0];
+    var dy = a[1] - b[1];
+    return dx * dx + dy * dy;
+});
+
+var _MJS_v2normalize = function(a) {
+    var r = new Float64Array(2);
+    var im = 1.0 / _MJS_v2lengthLocal(a);
+    r[0] = a[0] * im;
+    r[1] = a[1] * im;
+    return r;
+};
+
+var _MJS_v2scale = F2(function(k, a) {
+    var r = new Float64Array(2);
+    r[0] = a[0] * k;
+    r[1] = a[1] * k;
+    return r;
+});
+
+var _MJS_v2dot = F2(function(a, b) {
+    return a[0] * b[0] + a[1] * b[1];
+});
+
+// Vector3
+
+var _MJS_v3temp1Local = new Float64Array(3);
+var _MJS_v3temp2Local = new Float64Array(3);
+var _MJS_v3temp3Local = new Float64Array(3);
+
+var _MJS_v3 = F3(function(x, y, z) {
+    return new Float64Array([x, y, z]);
+});
+
+var _MJS_v3getX = function(a) {
+    return a[0];
+};
+
+var _MJS_v3getY = function(a) {
+    return a[1];
+};
+
+var _MJS_v3getZ = function(a) {
+    return a[2];
+};
+
+var _MJS_v3setX = F2(function(x, a) {
+    return new Float64Array([x, a[1], a[2]]);
+});
+
+var _MJS_v3setY = F2(function(y, a) {
+    return new Float64Array([a[0], y, a[2]]);
+});
+
+var _MJS_v3setZ = F2(function(z, a) {
+    return new Float64Array([a[0], a[1], z]);
+});
+
+var _MJS_v3toRecord = function(a) {
+    return { x: a[0], y: a[1], z: a[2] };
+};
+
+var _MJS_v3fromRecord = function(r) {
+    return new Float64Array([r.x, r.y, r.z]);
+};
+
+var _MJS_v3add = F2(function(a, b) {
+    var r = new Float64Array(3);
+    r[0] = a[0] + b[0];
+    r[1] = a[1] + b[1];
+    r[2] = a[2] + b[2];
+    return r;
+});
+
+function _MJS_v3subLocal(a, b, r) {
+    if (r === undefined) {
+        r = new Float64Array(3);
+    }
+    r[0] = a[0] - b[0];
+    r[1] = a[1] - b[1];
+    r[2] = a[2] - b[2];
+    return r;
+}
+var _MJS_v3sub = F2(_MJS_v3subLocal);
+
+var _MJS_v3negate = function(a) {
+    var r = new Float64Array(3);
+    r[0] = -a[0];
+    r[1] = -a[1];
+    r[2] = -a[2];
+    return r;
+};
+
+function _MJS_v3directionLocal(a, b, r) {
+    if (r === undefined) {
+        r = new Float64Array(3);
+    }
+    return _MJS_v3normalizeLocal(_MJS_v3subLocal(a, b, r), r);
+}
+var _MJS_v3direction = F2(_MJS_v3directionLocal);
+
+function _MJS_v3lengthLocal(a) {
+    return Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+}
+var _MJS_v3length = _MJS_v3lengthLocal;
+
+var _MJS_v3lengthSquared = function(a) {
+    return a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
+};
+
+var _MJS_v3distance = F2(function(a, b) {
+    var dx = a[0] - b[0];
+    var dy = a[1] - b[1];
+    var dz = a[2] - b[2];
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+});
+
+var _MJS_v3distanceSquared = F2(function(a, b) {
+    var dx = a[0] - b[0];
+    var dy = a[1] - b[1];
+    var dz = a[2] - b[2];
+    return dx * dx + dy * dy + dz * dz;
+});
+
+function _MJS_v3normalizeLocal(a, r) {
+    if (r === undefined) {
+        r = new Float64Array(3);
+    }
+    var im = 1.0 / _MJS_v3lengthLocal(a);
+    r[0] = a[0] * im;
+    r[1] = a[1] * im;
+    r[2] = a[2] * im;
+    return r;
+}
+var _MJS_v3normalize = _MJS_v3normalizeLocal;
+
+var _MJS_v3scale = F2(function(k, a) {
+    return new Float64Array([a[0] * k, a[1] * k, a[2] * k]);
+});
+
+var _MJS_v3dotLocal = function(a, b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+};
+var _MJS_v3dot = F2(_MJS_v3dotLocal);
+
+function _MJS_v3crossLocal(a, b, r) {
+    if (r === undefined) {
+        r = new Float64Array(3);
+    }
+    r[0] = a[1] * b[2] - a[2] * b[1];
+    r[1] = a[2] * b[0] - a[0] * b[2];
+    r[2] = a[0] * b[1] - a[1] * b[0];
+    return r;
+}
+var _MJS_v3cross = F2(_MJS_v3crossLocal);
+
+var _MJS_v3mul4x4 = F2(function(m, v) {
+    var w;
+    var tmp = _MJS_v3temp1Local;
+    var r = new Float64Array(3);
+
+    tmp[0] = m[3];
+    tmp[1] = m[7];
+    tmp[2] = m[11];
+    w = _MJS_v3dotLocal(v, tmp) + m[15];
+    tmp[0] = m[0];
+    tmp[1] = m[4];
+    tmp[2] = m[8];
+    r[0] = (_MJS_v3dotLocal(v, tmp) + m[12]) / w;
+    tmp[0] = m[1];
+    tmp[1] = m[5];
+    tmp[2] = m[9];
+    r[1] = (_MJS_v3dotLocal(v, tmp) + m[13]) / w;
+    tmp[0] = m[2];
+    tmp[1] = m[6];
+    tmp[2] = m[10];
+    r[2] = (_MJS_v3dotLocal(v, tmp) + m[14]) / w;
+    return r;
+});
+
+// Vector4
+
+var _MJS_v4 = F4(function(x, y, z, w) {
+    return new Float64Array([x, y, z, w]);
+});
+
+var _MJS_v4getX = function(a) {
+    return a[0];
+};
+
+var _MJS_v4getY = function(a) {
+    return a[1];
+};
+
+var _MJS_v4getZ = function(a) {
+    return a[2];
+};
+
+var _MJS_v4getW = function(a) {
+    return a[3];
+};
+
+var _MJS_v4setX = F2(function(x, a) {
+    return new Float64Array([x, a[1], a[2], a[3]]);
+});
+
+var _MJS_v4setY = F2(function(y, a) {
+    return new Float64Array([a[0], y, a[2], a[3]]);
+});
+
+var _MJS_v4setZ = F2(function(z, a) {
+    return new Float64Array([a[0], a[1], z, a[3]]);
+});
+
+var _MJS_v4setW = F2(function(w, a) {
+    return new Float64Array([a[0], a[1], a[2], w]);
+});
+
+var _MJS_v4toRecord = function(a) {
+    return { x: a[0], y: a[1], z: a[2], w: a[3] };
+};
+
+var _MJS_v4fromRecord = function(r) {
+    return new Float64Array([r.x, r.y, r.z, r.w]);
+};
+
+var _MJS_v4add = F2(function(a, b) {
+    var r = new Float64Array(4);
+    r[0] = a[0] + b[0];
+    r[1] = a[1] + b[1];
+    r[2] = a[2] + b[2];
+    r[3] = a[3] + b[3];
+    return r;
+});
+
+var _MJS_v4sub = F2(function(a, b) {
+    var r = new Float64Array(4);
+    r[0] = a[0] - b[0];
+    r[1] = a[1] - b[1];
+    r[2] = a[2] - b[2];
+    r[3] = a[3] - b[3];
+    return r;
+});
+
+var _MJS_v4negate = function(a) {
+    var r = new Float64Array(4);
+    r[0] = -a[0];
+    r[1] = -a[1];
+    r[2] = -a[2];
+    r[3] = -a[3];
+    return r;
+};
+
+var _MJS_v4direction = F2(function(a, b) {
+    var r = new Float64Array(4);
+    r[0] = a[0] - b[0];
+    r[1] = a[1] - b[1];
+    r[2] = a[2] - b[2];
+    r[3] = a[3] - b[3];
+    var im = 1.0 / _MJS_v4lengthLocal(r);
+    r[0] = r[0] * im;
+    r[1] = r[1] * im;
+    r[2] = r[2] * im;
+    r[3] = r[3] * im;
+    return r;
+});
+
+function _MJS_v4lengthLocal(a) {
+    return Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2] + a[3] * a[3]);
+}
+var _MJS_v4length = _MJS_v4lengthLocal;
+
+var _MJS_v4lengthSquared = function(a) {
+    return a[0] * a[0] + a[1] * a[1] + a[2] * a[2] + a[3] * a[3];
+};
+
+var _MJS_v4distance = F2(function(a, b) {
+    var dx = a[0] - b[0];
+    var dy = a[1] - b[1];
+    var dz = a[2] - b[2];
+    var dw = a[3] - b[3];
+    return Math.sqrt(dx * dx + dy * dy + dz * dz + dw * dw);
+});
+
+var _MJS_v4distanceSquared = F2(function(a, b) {
+    var dx = a[0] - b[0];
+    var dy = a[1] - b[1];
+    var dz = a[2] - b[2];
+    var dw = a[3] - b[3];
+    return dx * dx + dy * dy + dz * dz + dw * dw;
+});
+
+var _MJS_v4normalize = function(a) {
+    var r = new Float64Array(4);
+    var im = 1.0 / _MJS_v4lengthLocal(a);
+    r[0] = a[0] * im;
+    r[1] = a[1] * im;
+    r[2] = a[2] * im;
+    r[3] = a[3] * im;
+    return r;
+};
+
+var _MJS_v4scale = F2(function(k, a) {
+    var r = new Float64Array(4);
+    r[0] = a[0] * k;
+    r[1] = a[1] * k;
+    r[2] = a[2] * k;
+    r[3] = a[3] * k;
+    return r;
+});
+
+var _MJS_v4dot = F2(function(a, b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+});
+
+// Matrix4
+
+var _MJS_m4x4temp1Local = new Float64Array(16);
+var _MJS_m4x4temp2Local = new Float64Array(16);
+
+var _MJS_m4x4identity = new Float64Array([
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0
+]);
+
+var _MJS_m4x4fromRecord = function(r) {
+    var m = new Float64Array(16);
+    m[0] = r.m11;
+    m[1] = r.m21;
+    m[2] = r.m31;
+    m[3] = r.m41;
+    m[4] = r.m12;
+    m[5] = r.m22;
+    m[6] = r.m32;
+    m[7] = r.m42;
+    m[8] = r.m13;
+    m[9] = r.m23;
+    m[10] = r.m33;
+    m[11] = r.m43;
+    m[12] = r.m14;
+    m[13] = r.m24;
+    m[14] = r.m34;
+    m[15] = r.m44;
+    return m;
+};
+
+var _MJS_m4x4toRecord = function(m) {
+    return {
+        m11: m[0], m21: m[1], m31: m[2], m41: m[3],
+        m12: m[4], m22: m[5], m32: m[6], m42: m[7],
+        m13: m[8], m23: m[9], m33: m[10], m43: m[11],
+        m14: m[12], m24: m[13], m34: m[14], m44: m[15]
+    };
+};
+
+var _MJS_m4x4inverse = function(m) {
+    var r = new Float64Array(16);
+
+    r[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] +
+        m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+    r[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] -
+        m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
+    r[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] +
+        m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+    r[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] -
+        m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+    r[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] -
+        m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
+    r[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] +
+        m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
+    r[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] -
+        m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
+    r[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] +
+        m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
+    r[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] +
+        m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
+    r[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] -
+        m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
+    r[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] +
+        m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
+    r[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] -
+        m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
+    r[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] -
+        m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
+    r[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] +
+        m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
+    r[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] -
+        m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
+    r[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] +
+        m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
+
+    var det = m[0] * r[0] + m[1] * r[4] + m[2] * r[8] + m[3] * r[12];
+
+    if (det === 0) {
+        return elm$core$Maybe$Nothing;
+    }
+
+    det = 1.0 / det;
+
+    for (var i = 0; i < 16; i = i + 1) {
+        r[i] = r[i] * det;
+    }
+
+    return elm$core$Maybe$Just(r);
+};
+
+var _MJS_m4x4inverseOrthonormal = function(m) {
+    var r = _MJS_m4x4transposeLocal(m);
+    var t = [m[12], m[13], m[14]];
+    r[3] = r[7] = r[11] = 0;
+    r[12] = -_MJS_v3dotLocal([r[0], r[4], r[8]], t);
+    r[13] = -_MJS_v3dotLocal([r[1], r[5], r[9]], t);
+    r[14] = -_MJS_v3dotLocal([r[2], r[6], r[10]], t);
+    return r;
+};
+
+function _MJS_m4x4makeFrustumLocal(left, right, bottom, top, znear, zfar) {
+    var r = new Float64Array(16);
+
+    r[0] = 2 * znear / (right - left);
+    r[1] = 0;
+    r[2] = 0;
+    r[3] = 0;
+    r[4] = 0;
+    r[5] = 2 * znear / (top - bottom);
+    r[6] = 0;
+    r[7] = 0;
+    r[8] = (right + left) / (right - left);
+    r[9] = (top + bottom) / (top - bottom);
+    r[10] = -(zfar + znear) / (zfar - znear);
+    r[11] = -1;
+    r[12] = 0;
+    r[13] = 0;
+    r[14] = -2 * zfar * znear / (zfar - znear);
+    r[15] = 0;
+
+    return r;
+}
+var _MJS_m4x4makeFrustum = F6(_MJS_m4x4makeFrustumLocal);
+
+var _MJS_m4x4makePerspective = F4(function(fovy, aspect, znear, zfar) {
+    var ymax = znear * Math.tan(fovy * Math.PI / 360.0);
+    var ymin = -ymax;
+    var xmin = ymin * aspect;
+    var xmax = ymax * aspect;
+
+    return _MJS_m4x4makeFrustumLocal(xmin, xmax, ymin, ymax, znear, zfar);
+});
+
+function _MJS_m4x4makeOrthoLocal(left, right, bottom, top, znear, zfar) {
+    var r = new Float64Array(16);
+
+    r[0] = 2 / (right - left);
+    r[1] = 0;
+    r[2] = 0;
+    r[3] = 0;
+    r[4] = 0;
+    r[5] = 2 / (top - bottom);
+    r[6] = 0;
+    r[7] = 0;
+    r[8] = 0;
+    r[9] = 0;
+    r[10] = -2 / (zfar - znear);
+    r[11] = 0;
+    r[12] = -(right + left) / (right - left);
+    r[13] = -(top + bottom) / (top - bottom);
+    r[14] = -(zfar + znear) / (zfar - znear);
+    r[15] = 1;
+
+    return r;
+}
+var _MJS_m4x4makeOrtho = F6(_MJS_m4x4makeOrthoLocal);
+
+var _MJS_m4x4makeOrtho2D = F4(function(left, right, bottom, top) {
+    return _MJS_m4x4makeOrthoLocal(left, right, bottom, top, -1, 1);
+});
+
+function _MJS_m4x4mulLocal(a, b) {
+    var r = new Float64Array(16);
+    var a11 = a[0];
+    var a21 = a[1];
+    var a31 = a[2];
+    var a41 = a[3];
+    var a12 = a[4];
+    var a22 = a[5];
+    var a32 = a[6];
+    var a42 = a[7];
+    var a13 = a[8];
+    var a23 = a[9];
+    var a33 = a[10];
+    var a43 = a[11];
+    var a14 = a[12];
+    var a24 = a[13];
+    var a34 = a[14];
+    var a44 = a[15];
+    var b11 = b[0];
+    var b21 = b[1];
+    var b31 = b[2];
+    var b41 = b[3];
+    var b12 = b[4];
+    var b22 = b[5];
+    var b32 = b[6];
+    var b42 = b[7];
+    var b13 = b[8];
+    var b23 = b[9];
+    var b33 = b[10];
+    var b43 = b[11];
+    var b14 = b[12];
+    var b24 = b[13];
+    var b34 = b[14];
+    var b44 = b[15];
+
+    r[0] = a11 * b11 + a12 * b21 + a13 * b31 + a14 * b41;
+    r[1] = a21 * b11 + a22 * b21 + a23 * b31 + a24 * b41;
+    r[2] = a31 * b11 + a32 * b21 + a33 * b31 + a34 * b41;
+    r[3] = a41 * b11 + a42 * b21 + a43 * b31 + a44 * b41;
+    r[4] = a11 * b12 + a12 * b22 + a13 * b32 + a14 * b42;
+    r[5] = a21 * b12 + a22 * b22 + a23 * b32 + a24 * b42;
+    r[6] = a31 * b12 + a32 * b22 + a33 * b32 + a34 * b42;
+    r[7] = a41 * b12 + a42 * b22 + a43 * b32 + a44 * b42;
+    r[8] = a11 * b13 + a12 * b23 + a13 * b33 + a14 * b43;
+    r[9] = a21 * b13 + a22 * b23 + a23 * b33 + a24 * b43;
+    r[10] = a31 * b13 + a32 * b23 + a33 * b33 + a34 * b43;
+    r[11] = a41 * b13 + a42 * b23 + a43 * b33 + a44 * b43;
+    r[12] = a11 * b14 + a12 * b24 + a13 * b34 + a14 * b44;
+    r[13] = a21 * b14 + a22 * b24 + a23 * b34 + a24 * b44;
+    r[14] = a31 * b14 + a32 * b24 + a33 * b34 + a34 * b44;
+    r[15] = a41 * b14 + a42 * b24 + a43 * b34 + a44 * b44;
+
+    return r;
+}
+var _MJS_m4x4mul = F2(_MJS_m4x4mulLocal);
+
+var _MJS_m4x4mulAffine = F2(function(a, b) {
+    var r = new Float64Array(16);
+    var a11 = a[0];
+    var a21 = a[1];
+    var a31 = a[2];
+    var a12 = a[4];
+    var a22 = a[5];
+    var a32 = a[6];
+    var a13 = a[8];
+    var a23 = a[9];
+    var a33 = a[10];
+    var a14 = a[12];
+    var a24 = a[13];
+    var a34 = a[14];
+
+    var b11 = b[0];
+    var b21 = b[1];
+    var b31 = b[2];
+    var b12 = b[4];
+    var b22 = b[5];
+    var b32 = b[6];
+    var b13 = b[8];
+    var b23 = b[9];
+    var b33 = b[10];
+    var b14 = b[12];
+    var b24 = b[13];
+    var b34 = b[14];
+
+    r[0] = a11 * b11 + a12 * b21 + a13 * b31;
+    r[1] = a21 * b11 + a22 * b21 + a23 * b31;
+    r[2] = a31 * b11 + a32 * b21 + a33 * b31;
+    r[3] = 0;
+    r[4] = a11 * b12 + a12 * b22 + a13 * b32;
+    r[5] = a21 * b12 + a22 * b22 + a23 * b32;
+    r[6] = a31 * b12 + a32 * b22 + a33 * b32;
+    r[7] = 0;
+    r[8] = a11 * b13 + a12 * b23 + a13 * b33;
+    r[9] = a21 * b13 + a22 * b23 + a23 * b33;
+    r[10] = a31 * b13 + a32 * b23 + a33 * b33;
+    r[11] = 0;
+    r[12] = a11 * b14 + a12 * b24 + a13 * b34 + a14;
+    r[13] = a21 * b14 + a22 * b24 + a23 * b34 + a24;
+    r[14] = a31 * b14 + a32 * b24 + a33 * b34 + a34;
+    r[15] = 1;
+
+    return r;
+});
+
+var _MJS_m4x4makeRotate = F2(function(angle, axis) {
+    var r = new Float64Array(16);
+    axis = _MJS_v3normalizeLocal(axis, _MJS_v3temp1Local);
+    var x = axis[0];
+    var y = axis[1];
+    var z = axis[2];
+    var c = Math.cos(angle);
+    var c1 = 1 - c;
+    var s = Math.sin(angle);
+
+    r[0] = x * x * c1 + c;
+    r[1] = y * x * c1 + z * s;
+    r[2] = z * x * c1 - y * s;
+    r[3] = 0;
+    r[4] = x * y * c1 - z * s;
+    r[5] = y * y * c1 + c;
+    r[6] = y * z * c1 + x * s;
+    r[7] = 0;
+    r[8] = x * z * c1 + y * s;
+    r[9] = y * z * c1 - x * s;
+    r[10] = z * z * c1 + c;
+    r[11] = 0;
+    r[12] = 0;
+    r[13] = 0;
+    r[14] = 0;
+    r[15] = 1;
+
+    return r;
+});
+
+var _MJS_m4x4rotate = F3(function(angle, axis, m) {
+    var r = new Float64Array(16);
+    var im = 1.0 / _MJS_v3lengthLocal(axis);
+    var x = axis[0] * im;
+    var y = axis[1] * im;
+    var z = axis[2] * im;
+    var c = Math.cos(angle);
+    var c1 = 1 - c;
+    var s = Math.sin(angle);
+    var xs = x * s;
+    var ys = y * s;
+    var zs = z * s;
+    var xyc1 = x * y * c1;
+    var xzc1 = x * z * c1;
+    var yzc1 = y * z * c1;
+    var t11 = x * x * c1 + c;
+    var t21 = xyc1 + zs;
+    var t31 = xzc1 - ys;
+    var t12 = xyc1 - zs;
+    var t22 = y * y * c1 + c;
+    var t32 = yzc1 + xs;
+    var t13 = xzc1 + ys;
+    var t23 = yzc1 - xs;
+    var t33 = z * z * c1 + c;
+    var m11 = m[0], m21 = m[1], m31 = m[2], m41 = m[3];
+    var m12 = m[4], m22 = m[5], m32 = m[6], m42 = m[7];
+    var m13 = m[8], m23 = m[9], m33 = m[10], m43 = m[11];
+    var m14 = m[12], m24 = m[13], m34 = m[14], m44 = m[15];
+
+    r[0] = m11 * t11 + m12 * t21 + m13 * t31;
+    r[1] = m21 * t11 + m22 * t21 + m23 * t31;
+    r[2] = m31 * t11 + m32 * t21 + m33 * t31;
+    r[3] = m41 * t11 + m42 * t21 + m43 * t31;
+    r[4] = m11 * t12 + m12 * t22 + m13 * t32;
+    r[5] = m21 * t12 + m22 * t22 + m23 * t32;
+    r[6] = m31 * t12 + m32 * t22 + m33 * t32;
+    r[7] = m41 * t12 + m42 * t22 + m43 * t32;
+    r[8] = m11 * t13 + m12 * t23 + m13 * t33;
+    r[9] = m21 * t13 + m22 * t23 + m23 * t33;
+    r[10] = m31 * t13 + m32 * t23 + m33 * t33;
+    r[11] = m41 * t13 + m42 * t23 + m43 * t33;
+    r[12] = m14,
+    r[13] = m24;
+    r[14] = m34;
+    r[15] = m44;
+
+    return r;
+});
+
+function _MJS_m4x4makeScale3Local(x, y, z) {
+    var r = new Float64Array(16);
+
+    r[0] = x;
+    r[1] = 0;
+    r[2] = 0;
+    r[3] = 0;
+    r[4] = 0;
+    r[5] = y;
+    r[6] = 0;
+    r[7] = 0;
+    r[8] = 0;
+    r[9] = 0;
+    r[10] = z;
+    r[11] = 0;
+    r[12] = 0;
+    r[13] = 0;
+    r[14] = 0;
+    r[15] = 1;
+
+    return r;
+}
+var _MJS_m4x4makeScale3 = F3(_MJS_m4x4makeScale3Local);
+
+var _MJS_m4x4makeScale = function(v) {
+    return _MJS_m4x4makeScale3Local(v[0], v[1], v[2]);
+};
+
+var _MJS_m4x4scale3 = F4(function(x, y, z, m) {
+    var r = new Float64Array(16);
+
+    r[0] = m[0] * x;
+    r[1] = m[1] * x;
+    r[2] = m[2] * x;
+    r[3] = m[3] * x;
+    r[4] = m[4] * y;
+    r[5] = m[5] * y;
+    r[6] = m[6] * y;
+    r[7] = m[7] * y;
+    r[8] = m[8] * z;
+    r[9] = m[9] * z;
+    r[10] = m[10] * z;
+    r[11] = m[11] * z;
+    r[12] = m[12];
+    r[13] = m[13];
+    r[14] = m[14];
+    r[15] = m[15];
+
+    return r;
+});
+
+var _MJS_m4x4scale = F2(function(v, m) {
+    var r = new Float64Array(16);
+    var x = v[0];
+    var y = v[1];
+    var z = v[2];
+
+    r[0] = m[0] * x;
+    r[1] = m[1] * x;
+    r[2] = m[2] * x;
+    r[3] = m[3] * x;
+    r[4] = m[4] * y;
+    r[5] = m[5] * y;
+    r[6] = m[6] * y;
+    r[7] = m[7] * y;
+    r[8] = m[8] * z;
+    r[9] = m[9] * z;
+    r[10] = m[10] * z;
+    r[11] = m[11] * z;
+    r[12] = m[12];
+    r[13] = m[13];
+    r[14] = m[14];
+    r[15] = m[15];
+
+    return r;
+});
+
+function _MJS_m4x4makeTranslate3Local(x, y, z) {
+    var r = new Float64Array(16);
+
+    r[0] = 1;
+    r[1] = 0;
+    r[2] = 0;
+    r[3] = 0;
+    r[4] = 0;
+    r[5] = 1;
+    r[6] = 0;
+    r[7] = 0;
+    r[8] = 0;
+    r[9] = 0;
+    r[10] = 1;
+    r[11] = 0;
+    r[12] = x;
+    r[13] = y;
+    r[14] = z;
+    r[15] = 1;
+
+    return r;
+}
+var _MJS_m4x4makeTranslate3 = F3(_MJS_m4x4makeTranslate3Local);
+
+var _MJS_m4x4makeTranslate = function(v) {
+    return _MJS_m4x4makeTranslate3Local(v[0], v[1], v[2]);
+};
+
+var _MJS_m4x4translate3 = F4(function(x, y, z, m) {
+    var r = new Float64Array(16);
+    var m11 = m[0];
+    var m21 = m[1];
+    var m31 = m[2];
+    var m41 = m[3];
+    var m12 = m[4];
+    var m22 = m[5];
+    var m32 = m[6];
+    var m42 = m[7];
+    var m13 = m[8];
+    var m23 = m[9];
+    var m33 = m[10];
+    var m43 = m[11];
+
+    r[0] = m11;
+    r[1] = m21;
+    r[2] = m31;
+    r[3] = m41;
+    r[4] = m12;
+    r[5] = m22;
+    r[6] = m32;
+    r[7] = m42;
+    r[8] = m13;
+    r[9] = m23;
+    r[10] = m33;
+    r[11] = m43;
+    r[12] = m11 * x + m12 * y + m13 * z + m[12];
+    r[13] = m21 * x + m22 * y + m23 * z + m[13];
+    r[14] = m31 * x + m32 * y + m33 * z + m[14];
+    r[15] = m41 * x + m42 * y + m43 * z + m[15];
+
+    return r;
+});
+
+var _MJS_m4x4translate = F2(function(v, m) {
+    var r = new Float64Array(16);
+    var x = v[0];
+    var y = v[1];
+    var z = v[2];
+    var m11 = m[0];
+    var m21 = m[1];
+    var m31 = m[2];
+    var m41 = m[3];
+    var m12 = m[4];
+    var m22 = m[5];
+    var m32 = m[6];
+    var m42 = m[7];
+    var m13 = m[8];
+    var m23 = m[9];
+    var m33 = m[10];
+    var m43 = m[11];
+
+    r[0] = m11;
+    r[1] = m21;
+    r[2] = m31;
+    r[3] = m41;
+    r[4] = m12;
+    r[5] = m22;
+    r[6] = m32;
+    r[7] = m42;
+    r[8] = m13;
+    r[9] = m23;
+    r[10] = m33;
+    r[11] = m43;
+    r[12] = m11 * x + m12 * y + m13 * z + m[12];
+    r[13] = m21 * x + m22 * y + m23 * z + m[13];
+    r[14] = m31 * x + m32 * y + m33 * z + m[14];
+    r[15] = m41 * x + m42 * y + m43 * z + m[15];
+
+    return r;
+});
+
+var _MJS_m4x4makeLookAt = F3(function(eye, center, up) {
+    var z = _MJS_v3directionLocal(eye, center, _MJS_v3temp1Local);
+    var x = _MJS_v3normalizeLocal(_MJS_v3crossLocal(up, z, _MJS_v3temp2Local), _MJS_v3temp2Local);
+    var y = _MJS_v3normalizeLocal(_MJS_v3crossLocal(z, x, _MJS_v3temp3Local), _MJS_v3temp3Local);
+    var tm1 = _MJS_m4x4temp1Local;
+    var tm2 = _MJS_m4x4temp2Local;
+
+    tm1[0] = x[0];
+    tm1[1] = y[0];
+    tm1[2] = z[0];
+    tm1[3] = 0;
+    tm1[4] = x[1];
+    tm1[5] = y[1];
+    tm1[6] = z[1];
+    tm1[7] = 0;
+    tm1[8] = x[2];
+    tm1[9] = y[2];
+    tm1[10] = z[2];
+    tm1[11] = 0;
+    tm1[12] = 0;
+    tm1[13] = 0;
+    tm1[14] = 0;
+    tm1[15] = 1;
+
+    tm2[0] = 1; tm2[1] = 0; tm2[2] = 0; tm2[3] = 0;
+    tm2[4] = 0; tm2[5] = 1; tm2[6] = 0; tm2[7] = 0;
+    tm2[8] = 0; tm2[9] = 0; tm2[10] = 1; tm2[11] = 0;
+    tm2[12] = -eye[0]; tm2[13] = -eye[1]; tm2[14] = -eye[2]; tm2[15] = 1;
+
+    return _MJS_m4x4mulLocal(tm1, tm2);
+});
+
+
+function _MJS_m4x4transposeLocal(m) {
+    var r = new Float64Array(16);
+
+    r[0] = m[0]; r[1] = m[4]; r[2] = m[8]; r[3] = m[12];
+    r[4] = m[1]; r[5] = m[5]; r[6] = m[9]; r[7] = m[13];
+    r[8] = m[2]; r[9] = m[6]; r[10] = m[10]; r[11] = m[14];
+    r[12] = m[3]; r[13] = m[7]; r[14] = m[11]; r[15] = m[15];
+
+    return r;
+}
+var _MJS_m4x4transpose = _MJS_m4x4transposeLocal;
+
+var _MJS_m4x4makeBasis = F3(function(vx, vy, vz) {
+    var r = new Float64Array(16);
+
+    r[0] = vx[0];
+    r[1] = vx[1];
+    r[2] = vx[2];
+    r[3] = 0;
+    r[4] = vy[0];
+    r[5] = vy[1];
+    r[6] = vy[2];
+    r[7] = 0;
+    r[8] = vz[0];
+    r[9] = vz[1];
+    r[10] = vz[2];
+    r[11] = 0;
+    r[12] = 0;
+    r[13] = 0;
+    r[14] = 0;
+    r[15] = 1;
+
+    return r;
+});
+
+
+function _WebGL_log(/* msg */) {
+  // console.log(msg);
+}
+
+var _WebGL_guid = 0;
+
+function _WebGL_listEach(fn, list) {
+  for (; list.b; list = list.b) {
+    fn(list.a);
+  }
+}
+
+function _WebGL_listLength(list) {
+  var length = 0;
+  for (; list.b; list = list.b) {
+    length++;
+  }
+  return length;
+}
+
+var _WebGL_rAF = typeof requestAnimationFrame !== 'undefined' ?
+  requestAnimationFrame :
+  function (cb) { setTimeout(cb, 1000 / 60); };
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_entity = F5(function (settings, vert, frag, mesh, uniforms) {
+  return {
+    $: 0,
+    a: settings,
+    b: vert,
+    c: frag,
+    d: mesh,
+    e: uniforms
+  };
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableBlend = F2(function (gl, setting) {
+  gl.enable(gl.BLEND);
+  // a   b   c   d   e   f   g h i j
+  // eq1 f11 f12 eq2 f21 f22 r g b a
+  gl.blendEquationSeparate(setting.a, setting.d);
+  gl.blendFuncSeparate(setting.b, setting.c, setting.e, setting.f);
+  gl.blendColor(setting.g, setting.h, setting.i, setting.j);
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableDepthTest = F2(function (gl, setting) {
+  gl.enable(gl.DEPTH_TEST);
+  // a    b    c    d
+  // func mask near far
+  gl.depthFunc(setting.a);
+  gl.depthMask(setting.b);
+  gl.depthRange(setting.c, setting.d);
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableStencilTest = F2(function (gl, setting) {
+  gl.enable(gl.STENCIL_TEST);
+  // a   b    c         d     e     f      g      h     i     j      k
+  // ref mask writeMask test1 fail1 zfail1 zpass1 test2 fail2 zfail2 zpass2
+  gl.stencilFuncSeparate(gl.FRONT, setting.d, setting.a, setting.b);
+  gl.stencilOpSeparate(gl.FRONT, setting.e, setting.f, setting.g);
+  gl.stencilMaskSeparate(gl.FRONT, setting.c);
+  gl.stencilFuncSeparate(gl.BACK, setting.h, setting.a, setting.b);
+  gl.stencilOpSeparate(gl.BACK, setting.i, setting.j, setting.k);
+  gl.stencilMaskSeparate(gl.BACK, setting.c);
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableScissor = F2(function (gl, setting) {
+  gl.enable(gl.SCISSOR_TEST);
+  gl.scissor(setting.a, setting.b, setting.c, setting.d);
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableColorMask = F2(function (gl, setting) {
+  gl.colorMask(setting.a, setting.b, setting.c, setting.d);
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableCullFace = F2(function (gl, setting) {
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(setting.a);
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enablePolygonOffset = F2(function (gl, setting) {
+  gl.enable(gl.POLYGON_OFFSET_FILL);
+  gl.polygonOffset(setting.a, setting.b);
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableSampleCoverage = F2(function (gl, setting) {
+  gl.enable(gl.SAMPLE_COVERAGE);
+  gl.sampleCoverage(setting.a, setting.b);
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableSampleAlphaToCoverage = F2(function (gl, setting) {
+  gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_disableBlend = function (cache) {
+  cache.gl.disable(cache.gl.BLEND);
+};
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_disableDepthTest = function (cache) {
+  cache.gl.disable(cache.gl.DEPTH_TEST);
+  cache.gl.depthMask(true);
+};
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_disableStencilTest = function (cache) {
+  cache.gl.disable(cache.gl.STENCIL_TEST);
+  cache.gl.stencilMask(cache.STENCIL_WRITEMASK);
+};
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_disableScissor = function (cache) {
+  cache.gl.disable(cache.gl.SCISSOR_TEST);
+};
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_disableColorMask = function (cache) {
+  cache.gl.colorMask(true, true, true, true);
+};
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_disableCullFace = function (cache) {
+  cache.gl.disable(cache.gl.CULL_FACE);
+};
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_disablePolygonOffset = function (cache) {
+  cache.gl.disable(cache.gl.POLYGON_OFFSET_FILL);
+};
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_disableSampleCoverage = function (cache) {
+  cache.gl.disable(cache.gl.SAMPLE_COVERAGE);
+};
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_disableSampleAlphaToCoverage = function (cache) {
+  cache.gl.disable(cache.gl.SAMPLE_ALPHA_TO_COVERAGE);
+};
+
+function _WebGL_doCompile(gl, src, type) {
+
+  var shader = gl.createShader(type);
+  _WebGL_log('Created shader');
+
+  gl.shaderSource(shader, src);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    throw gl.getShaderInfoLog(shader);
+  }
+
+  return shader;
+
+}
+
+function _WebGL_doLink(gl, vshader, fshader) {
+
+  var program = gl.createProgram();
+  _WebGL_log('Created program');
+
+  gl.attachShader(program, vshader);
+  gl.attachShader(program, fshader);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    throw gl.getProgramInfoLog(program);
+  }
+
+  return program;
+
+}
+
+function _WebGL_getAttributeInfo(gl, type) {
+  switch (type) {
+    case gl.FLOAT:
+      return { size: 1, arraySize: 1, type: Float32Array, baseType: gl.FLOAT };
+    case gl.FLOAT_VEC2:
+      return { size: 2, arraySize: 1, type: Float32Array, baseType: gl.FLOAT };
+    case gl.FLOAT_VEC3:
+      return { size: 3, arraySize: 1, type: Float32Array, baseType: gl.FLOAT };
+    case gl.FLOAT_VEC4:
+      return { size: 4, arraySize: 1, type: Float32Array, baseType: gl.FLOAT };
+    case gl.FLOAT_MAT4:
+      return { size: 4, arraySize: 4, type: Float32Array, baseType: gl.FLOAT };
+    case gl.INT:
+      return { size: 1, arraySize: 1, type: Int32Array, baseType: gl.INT };
+  }
+}
+
+/**
+ *  Form the buffer for a given attribute.
+ *
+ *  @param {WebGLRenderingContext} gl context
+ *  @param {WebGLActiveInfo} attribute the attribute to bind to.
+ *         We use its name to grab the record by name and also to know
+ *         how many elements we need to grab.
+ *  @param {Mesh} mesh The mesh coming in from Elm.
+ *  @param {Object} attributes The mapping between the attribute names and Elm fields
+ *  @return {WebGLBuffer}
+ */
+function _WebGL_doBindAttribute(gl, attribute, mesh, attributes) {
+  // The length of the number of vertices that
+  // complete one 'thing' based on the drawing mode.
+  // ie, 2 for Lines, 3 for Triangles, etc.
+  var elemSize = mesh.a.elemSize;
+
+  var idxKeys = [];
+  for (var i = 0; i < elemSize; i++) {
+    idxKeys.push(String.fromCharCode(97 + i));
+  }
+
+  function dataFill(data, cnt, fillOffset, elem, key) {
+    var i;
+    if (elemSize === 1) {
+      for (i = 0; i < cnt; i++) {
+        data[fillOffset++] = cnt === 1 ? elem[key] : elem[key][i];
+      }
+    } else {
+      idxKeys.forEach(function (idx) {
+        for (i = 0; i < cnt; i++) {
+          data[fillOffset++] = cnt === 1 ? elem[idx][key] : elem[idx][key][i];
+        }
+      });
+    }
+  }
+
+  var attributeInfo = _WebGL_getAttributeInfo(gl, attribute.type);
+
+  if (attributeInfo === undefined) {
+    throw new Error('No info available for: ' + attribute.type);
+  }
+
+  var dataIdx = 0;
+  var dataOffset = attributeInfo.size * attributeInfo.arraySize * elemSize;
+  var array = new attributeInfo.type(_WebGL_listLength(mesh.b) * dataOffset);
+
+  _WebGL_listEach(function (elem) {
+    dataFill(array, attributeInfo.size * attributeInfo.arraySize, dataIdx, elem, attributes[attribute.name] || attribute.name);
+    dataIdx += dataOffset;
+  }, mesh.b);
+
+  var buffer = gl.createBuffer();
+  _WebGL_log('Created attribute buffer ' + attribute.name);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, array, gl.STATIC_DRAW);
+  return buffer;
+}
+
+/**
+ *  This sets up the binding caching buffers.
+ *
+ *  We don't actually bind any buffers now except for the indices buffer.
+ *  The problem with filling the buffers here is that it is possible to
+ *  have a buffer shared between two webgl shaders;
+ *  which could have different active attributes. If we bind it here against
+ *  a particular program, we might not bind them all. That final bind is now
+ *  done right before drawing.
+ *
+ *  @param {WebGLRenderingContext} gl context
+ *  @param {Mesh} mesh a mesh object from Elm
+ *  @return {Object} buffer - an object with the following properties
+ *  @return {Number} buffer.numIndices
+ *  @return {WebGLBuffer|null} buffer.indexBuffer - optional index buffer
+ *  @return {Object} buffer.buffers - will be used to buffer attributes
+ */
+function _WebGL_doBindSetup(gl, mesh) {
+  if (mesh.a.indexSize > 0) {
+    _WebGL_log('Created index buffer');
+    var indexBuffer = gl.createBuffer();
+    var indices = _WebGL_makeIndexedBuffer(mesh.c, mesh.a.indexSize);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    return {
+      numIndices: indices.length,
+      indexBuffer: indexBuffer,
+      buffers: {}
+    };
+  } else {
+    return {
+      numIndices: mesh.a.elemSize * _WebGL_listLength(mesh.b),
+      indexBuffer: null,
+      buffers: {}
+    };
+  }
+}
+
+/**
+ *  Create an indices array and fill it from indices
+ *  based on the size of the index
+ *
+ *  @param {List} indicesList the list of indices
+ *  @param {Number} indexSize the size of the index
+ *  @return {Uint16Array} indices
+ */
+function _WebGL_makeIndexedBuffer(indicesList, indexSize) {
+  var indices = new Uint16Array(_WebGL_listLength(indicesList) * indexSize);
+  var fillOffset = 0;
+  var i;
+  _WebGL_listEach(function (elem) {
+    if (indexSize === 1) {
+      indices[fillOffset++] = elem;
+    } else {
+      for (i = 0; i < indexSize; i++) {
+        indices[fillOffset++] = elem[String.fromCharCode(97 + i)];
+      }
+    }
+  }, indicesList);
+  return indices;
+}
+
+function _WebGL_getProgID(vertID, fragID) {
+  return vertID + '#' + fragID;
+}
+
+var _WebGL_drawGL = F2(function (model, domNode) {
+
+  var gl = model.f.gl;
+
+  if (!gl) {
+    return domNode;
+  }
+
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+  _WebGL_log('Drawing');
+
+  function drawEntity(entity) {
+    if (!entity.d.b.b) {
+      return; // Empty list
+    }
+
+    var progid;
+    var program;
+    if (entity.b.id && entity.c.id) {
+      progid = _WebGL_getProgID(entity.b.id, entity.c.id);
+      program = model.f.programs[progid];
+    }
+
+    if (!program) {
+
+      var vshader;
+      if (entity.b.id) {
+        vshader = model.f.shaders[entity.b.id];
+      } else {
+        entity.b.id = _WebGL_guid++;
+      }
+
+      if (!vshader) {
+        vshader = _WebGL_doCompile(gl, entity.b.src, gl.VERTEX_SHADER);
+        model.f.shaders[entity.b.id] = vshader;
+      }
+
+      var fshader;
+      if (entity.c.id) {
+        fshader = model.f.shaders[entity.c.id];
+      } else {
+        entity.c.id = _WebGL_guid++;
+      }
+
+      if (!fshader) {
+        fshader = _WebGL_doCompile(gl, entity.c.src, gl.FRAGMENT_SHADER);
+        model.f.shaders[entity.c.id] = fshader;
+      }
+
+      var glProgram = _WebGL_doLink(gl, vshader, fshader);
+
+      program = {
+        glProgram: glProgram,
+        attributes: Object.assign({}, entity.b.attributes, entity.c.attributes),
+        uniformSetters: _WebGL_createUniformSetters(
+          gl,
+          model,
+          glProgram,
+          Object.assign({}, entity.b.uniforms, entity.c.uniforms)
+        )
+      };
+
+      progid = _WebGL_getProgID(entity.b.id, entity.c.id);
+      model.f.programs[progid] = program;
+
+    }
+
+    gl.useProgram(program.glProgram);
+
+    _WebGL_setUniforms(program.uniformSetters, entity.e);
+
+    var buffer = model.f.buffers.get(entity.d);
+
+    if (!buffer) {
+      buffer = _WebGL_doBindSetup(gl, entity.d);
+      model.f.buffers.set(entity.d, buffer);
+    }
+
+    var numAttributes = gl.getProgramParameter(program.glProgram, gl.ACTIVE_ATTRIBUTES);
+
+    for (var i = 0; i < numAttributes; i++) {
+      var attribute = gl.getActiveAttrib(program.glProgram, i);
+
+      var attribLocation = gl.getAttribLocation(program.glProgram, attribute.name);
+      gl.enableVertexAttribArray(attribLocation);
+
+      if (buffer.buffers[attribute.name] === undefined) {
+        buffer.buffers[attribute.name] = _WebGL_doBindAttribute(gl, attribute, entity.d, program.attributes);
+      }
+      var attributeBuffer = buffer.buffers[attribute.name];
+      var attributeInfo = _WebGL_getAttributeInfo(gl, attribute.type);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, attributeBuffer);
+
+      if (attributeInfo.arraySize === 1) {
+        gl.vertexAttribPointer(attribLocation, attributeInfo.size, attributeInfo.baseType, false, 0, 0);
+      } else {
+        // Point to four vec4 in case of mat4
+        var offset = attributeInfo.size * 4; // float32 takes 4 bytes
+        var stride = offset * attributeInfo.arraySize;
+        for (var m = 0; m < attributeInfo.arraySize; m++) {
+          gl.enableVertexAttribArray(attribLocation + m);
+          gl.vertexAttribPointer(attribLocation + m, attributeInfo.size, attributeInfo.baseType, false, stride, offset * m);
+        }
+      }
+    }
+    _WebGL_listEach(elm_explorations$webgl$WebGL$Internal$enableSetting(gl), entity.a);
+
+    if (buffer.indexBuffer) {
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer.indexBuffer);
+      gl.drawElements(entity.d.a.mode, buffer.numIndices, gl.UNSIGNED_SHORT, 0);
+    } else {
+      gl.drawArrays(entity.d.a.mode, 0, buffer.numIndices);
+    }
+
+    _WebGL_listEach(elm_explorations$webgl$WebGL$Internal$disableSetting(model.f), entity.a);
+
+  }
+
+  _WebGL_listEach(drawEntity, model.g);
+  return domNode;
+});
+
+function _WebGL_createUniformSetters(gl, model, program, uniformsMap) {
+  var textureCounter = 0;
+  function createUniformSetter(program, uniform) {
+    var uniformLocation = gl.getUniformLocation(program, uniform.name);
+    switch (uniform.type) {
+      case gl.INT:
+        return function (value) {
+          gl.uniform1i(uniformLocation, value);
+        };
+      case gl.FLOAT:
+        return function (value) {
+          gl.uniform1f(uniformLocation, value);
+        };
+      case gl.FLOAT_VEC2:
+        return function (value) {
+          gl.uniform2fv(uniformLocation, new Float32Array(value));
+        };
+      case gl.FLOAT_VEC3:
+        return function (value) {
+          gl.uniform3fv(uniformLocation, new Float32Array(value));
+        };
+      case gl.FLOAT_VEC4:
+        return function (value) {
+          gl.uniform4fv(uniformLocation, new Float32Array(value));
+        };
+      case gl.FLOAT_MAT4:
+        return function (value) {
+          gl.uniformMatrix4fv(uniformLocation, false, new Float32Array(value));
+        };
+      case gl.SAMPLER_2D:
+        var currentTexture = textureCounter++;
+        return function (texture) {
+          gl.activeTexture(gl.TEXTURE0 + currentTexture);
+          var tex = model.f.textures.get(texture);
+          if (!tex) {
+            _WebGL_log('Created texture');
+            tex = texture.createTexture(gl);
+            model.f.textures.set(texture, tex);
+          }
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.uniform1i(uniformLocation, currentTexture);
+        };
+      case gl.BOOL:
+        return function (value) {
+          gl.uniform1i(uniformLocation, value);
+        };
+      default:
+        _WebGL_log('Unsupported uniform type: ' + uniform.type);
+        return function () { };
+    }
+  }
+
+  var uniformSetters = {};
+  var numUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+  for (var i = 0; i < numUniforms; i++) {
+    var uniform = gl.getActiveUniform(program, i);
+    uniformSetters[uniformsMap[uniform.name] || uniform.name] = createUniformSetter(program, uniform);
+  }
+
+  return uniformSetters;
+}
+
+function _WebGL_setUniforms(setters, values) {
+  Object.keys(values).forEach(function (name) {
+    var setter = setters[name];
+    if (setter) {
+      setter(values[name]);
+    }
+  });
+}
+
+// VIRTUAL-DOM WIDGET
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_toHtml = F3(function (options, factList, entities) {
+  return _VirtualDom_custom(
+    factList,
+    {
+      g: entities,
+      f: {},
+      h: options
+    },
+    _WebGL_render,
+    _WebGL_diff
+  );
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableAlpha = F2(function (options, option) {
+  options.contextAttributes.alpha = true;
+  options.contextAttributes.premultipliedAlpha = option.a;
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableDepth = F2(function (options, option) {
+  options.contextAttributes.depth = true;
+  options.sceneSettings.push(function (gl) {
+    gl.clearDepth(option.a);
+  });
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableStencil = F2(function (options, option) {
+  options.contextAttributes.stencil = true;
+  options.sceneSettings.push(function (gl) {
+    gl.clearStencil(option.a);
+  });
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableAntialias = F2(function (options, option) {
+  options.contextAttributes.antialias = true;
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enableClearColor = F2(function (options, option) {
+  options.sceneSettings.push(function (gl) {
+    gl.clearColor(option.a, option.b, option.c, option.d);
+  });
+});
+
+// eslint-disable-next-line no-unused-vars
+var _WebGL_enablePreserveDrawingBuffer = F2(function (options, option) {
+  options.contextAttributes.preserveDrawingBuffer = true;
+});
+
+/**
+ *  Creates canvas and schedules initial _WebGL_drawGL
+ *  @param {Object} model
+ *  @param {Object} model.f that may contain the following properties:
+           gl, shaders, programs, buffers, textures
+ *  @param {List<Option>} model.h list of options coming from Elm
+ *  @param {List<Entity>} model.g list of entities coming from Elm
+ *  @return {HTMLElement} <canvas> if WebGL is supported, otherwise a <div>
+ */
+function _WebGL_render(model) {
+  var options = {
+    contextAttributes: {
+      alpha: false,
+      depth: false,
+      stencil: false,
+      antialias: false,
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: false
+    },
+    sceneSettings: []
+  };
+
+  _WebGL_listEach(function (option) {
+    return A2(elm_explorations$webgl$WebGL$Internal$enableOption, options, option);
+  }, model.h);
+
+  _WebGL_log('Render canvas');
+  var canvas = _VirtualDom_doc.createElement('canvas');
+  var gl = canvas.getContext && (
+    canvas.getContext('webgl', options.contextAttributes) ||
+    canvas.getContext('experimental-webgl', options.contextAttributes)
+  );
+
+  if (gl && typeof WeakMap !== 'undefined') {
+    options.sceneSettings.forEach(function (sceneSetting) {
+      sceneSetting(gl);
+    });
+
+    model.f.gl = gl;
+    model.f.shaders = [];
+    model.f.programs = {};
+    model.f.buffers = new WeakMap();
+    model.f.textures = new WeakMap();
+    // Memorize the initial stencil write mask, because
+    // browsers may have different number of stencil bits
+    model.f.STENCIL_WRITEMASK = gl.getParameter(gl.STENCIL_WRITEMASK);
+
+    // Render for the first time.
+    // This has to be done in animation frame,
+    // because the canvas is not in the DOM yet
+    _WebGL_rAF(function () {
+      return A2(_WebGL_drawGL, model, canvas);
+    });
+
+  } else {
+    canvas = _VirtualDom_doc.createElement('div');
+    canvas.innerHTML = '<a href="https://get.webgl.org/">Enable WebGL</a> to see this content!';
+  }
+
+  return canvas;
+}
+
+function _WebGL_diff(oldModel, newModel) {
+  newModel.f = oldModel.f;
+  return _WebGL_drawGL(newModel);
+}
 var author$project$LayerSelection$LayerSelection = function (a) {
 	return {$: 'LayerSelection', a: a};
 };
@@ -4464,79 +6120,21 @@ var author$project$MapEditor$gridEditorPaneWidth = function (windowWidth) {
 var author$project$GridEditor$State = function (a) {
 	return {$: 'State', a: a};
 };
-var elm$core$Array$Array_elm_builtin = F4(
-	function (a, b, c, d) {
-		return {$: 'Array_elm_builtin', a: a, b: b, c: c, d: d};
-	});
-var elm$core$Array$Leaf = function (a) {
-	return {$: 'Leaf', a: a};
-};
-var elm$core$Array$SubTree = function (a) {
-	return {$: 'SubTree', a: a};
-};
-var elm$core$Basics$apL = F2(
-	function (f, x) {
-		return f(x);
-	});
-var elm$core$Elm$JsArray$map = _JsArray_map;
-var elm$core$Array$map = F2(
-	function (func, _n0) {
-		var len = _n0.a;
-		var startShift = _n0.b;
-		var tree = _n0.c;
-		var tail = _n0.d;
-		var helper = function (node) {
-			if (node.$ === 'SubTree') {
-				var subTree = node.a;
-				return elm$core$Array$SubTree(
-					A2(elm$core$Elm$JsArray$map, helper, subTree));
-			} else {
-				var values = node.a;
-				return elm$core$Array$Leaf(
-					A2(elm$core$Elm$JsArray$map, func, values));
-			}
-		};
-		return A4(
-			elm$core$Array$Array_elm_builtin,
-			len,
-			startShift,
-			A2(elm$core$Elm$JsArray$map, helper, tree),
-			A2(elm$core$Elm$JsArray$map, func, tail));
-	});
-var author$project$Grid$map = F2(
-	function (f, grid) {
-		return A2(
-			elm$core$Array$map,
-			elm$core$Array$map(f),
-			grid);
-	});
-var elm$core$Basics$composeL = F3(
-	function (g, f, x) {
-		return g(
-			f(x));
-	});
-var elm$core$Basics$lt = _Utils_lt;
-var elm$core$Basics$min = F2(
-	function (x, y) {
-		return (_Utils_cmp(x, y) < 0) ? x : y;
-	});
-var author$project$GridEditor$boundInt = F2(
-	function (lower, upper) {
-		return A2(
-			elm$core$Basics$composeL,
-			elm$core$Basics$max(lower),
-			elm$core$Basics$min(upper));
-	});
-var author$project$GridEditor$boundGrid = F2(
-	function (lower, upper) {
-		return author$project$Grid$map(
-			A2(author$project$GridEditor$boundInt, lower, upper));
-	});
-var author$project$GridEditor$init = F6(
-	function (grid, cellMin, cellMax, gradient, paneWidth, paneHeight) {
-		var g = A3(author$project$GridEditor$boundGrid, cellMin, cellMax, grid);
+var elm$core$Maybe$Nothing = {$: 'Nothing'};
+var author$project$GridEditor$init = F4(
+	function (grid, gradient, canvasWidth, canvasHeight) {
 		return author$project$GridEditor$State(
-			{cellMax: cellMax, cellMin: cellMin, gradient: gradient, grid: g, paneHeight: paneHeight, paneWidth: paneWidth});
+			{
+				activeAction: elm$core$Maybe$Nothing,
+				cameraCenter: _Utils_Tuple2(0, 0),
+				currentTime: 0,
+				gradient: gradient,
+				grid: grid,
+				height: canvasHeight,
+				width: canvasWidth,
+				zoomStep: 0,
+				zoomStepDestination: 0
+			});
 	});
 var author$project$Layer$getColorGradient = function (_n0) {
 	var inner = _n0.a;
@@ -4546,21 +6144,12 @@ var author$project$Layer$getGrid = function (_n0) {
 	var inner = _n0.a;
 	return inner.grid;
 };
-var author$project$Layer$getMax = function (_n0) {
-	var inner = _n0.a;
-	return inner.max;
-};
-var author$project$Layer$getMin = function (_n0) {
-	var inner = _n0.a;
-	return inner.min;
-};
+var elm$core$Basics$toFloat = _Basics_toFloat;
 var author$project$MapEditor$makeGridEditor = F3(
 	function (layer, paneWidth, paneHeight) {
-		return A6(
+		return A4(
 			author$project$GridEditor$init,
 			author$project$Layer$getGrid(layer),
-			author$project$Layer$getMin(layer),
-			author$project$Layer$getMax(layer),
 			author$project$Layer$getColorGradient(layer),
 			paneWidth,
 			paneHeight);
@@ -4574,17 +6163,26 @@ var author$project$DiscreteGradient$init = function (stop) {
 			[stop]));
 };
 var elm$core$Array$branchFactor = 32;
+var elm$core$Array$Array_elm_builtin = F4(
+	function (a, b, c, d) {
+		return {$: 'Array_elm_builtin', a: a, b: b, c: c, d: d};
+	});
 var elm$core$Basics$ceiling = _Basics_ceiling;
 var elm$core$Basics$fdiv = _Basics_fdiv;
 var elm$core$Basics$logBase = F2(
 	function (base, number) {
 		return _Basics_log(number) / _Basics_log(base);
 	});
-var elm$core$Basics$toFloat = _Basics_toFloat;
 var elm$core$Array$shiftStep = elm$core$Basics$ceiling(
 	A2(elm$core$Basics$logBase, 2, elm$core$Array$branchFactor));
 var elm$core$Elm$JsArray$empty = _JsArray_empty;
 var elm$core$Array$empty = A4(elm$core$Array$Array_elm_builtin, 0, elm$core$Array$shiftStep, elm$core$Elm$JsArray$empty, elm$core$Elm$JsArray$empty);
+var elm$core$Array$Leaf = function (a) {
+	return {$: 'Leaf', a: a};
+};
+var elm$core$Array$SubTree = function (a) {
+	return {$: 'SubTree', a: a};
+};
 var elm$core$Elm$JsArray$initializeFromList = _JsArray_initializeFromList;
 var elm$core$List$foldl = F3(
 	function (func, acc, list) {
@@ -4656,6 +6254,10 @@ var elm$core$Array$treeFromBuilder = F2(
 		}
 	});
 var elm$core$Basics$add = _Basics_add;
+var elm$core$Basics$apL = F2(
+	function (f, x) {
+		return f(x);
+	});
 var elm$core$Basics$floor = _Basics_floor;
 var elm$core$Basics$mul = _Basics_mul;
 var elm$core$Elm$JsArray$length = _JsArray_length;
@@ -4684,6 +6286,7 @@ var elm$core$Array$builderToArray = F2(
 	});
 var elm$core$Basics$False = {$: 'False'};
 var elm$core$Basics$idiv = _Basics_idiv;
+var elm$core$Basics$lt = _Utils_lt;
 var elm$core$Elm$JsArray$initialize = _JsArray_initialize;
 var elm$core$Array$initializeHelp = F5(
 	function (fn, fromIndex, len, nodeList, tail) {
@@ -4742,6 +6345,11 @@ var elm$core$Basics$always = F2(
 	function (a, _n0) {
 		return a;
 	});
+var elm$core$Basics$composeL = F3(
+	function (g, f, x) {
+		return g(
+			f(x));
+	});
 var author$project$Grid$repeat = F3(
 	function (x, y, occupant) {
 		return A3(
@@ -4793,7 +6401,54 @@ var author$project$MapEditor$makeLayerWithDefaultMinMax = F3(
 		var defaultCellMax = 9;
 		return A5(author$project$Layer$init, name, width, height, defaultCellMin, defaultCellMax);
 	});
-var elm$core$Maybe$Nothing = {$: 'Nothing'};
+var author$project$MapEditor$init = function (_n0) {
+	var windowWidth = _n0.a;
+	var windowHeight = _n0.b;
+	var defaultMapWidth = 20;
+	var defaultMapHeight = 20;
+	var initLayer = A3(author$project$MapEditor$makeLayerWithDefaultMinMax, author$project$MapEditor$defaultLayerName, defaultMapWidth, defaultMapHeight);
+	var initGridEditor = A3(
+		author$project$MapEditor$makeGridEditor,
+		initLayer,
+		author$project$MapEditor$gridEditorPaneWidth(windowWidth),
+		author$project$MapEditor$gridEditorPaneHeight(windowHeight));
+	var initLayerSelection = author$project$LayerSelection$singleton(initLayer);
+	return {dialog: elm$core$Maybe$Nothing, gridEditor: initGridEditor, layerSelection: initLayerSelection, mapHeight: defaultMapHeight, mapWidth: defaultMapWidth, name: 'untitled', windowHeight: windowHeight, windowWidth: windowWidth};
+};
+var author$project$MapEditor$ElapsedTime = function (a) {
+	return {$: 'ElapsedTime', a: a};
+};
+var elm$browser$Browser$AnimationManager$Delta = function (a) {
+	return {$: 'Delta', a: a};
+};
+var elm$browser$Browser$AnimationManager$State = F3(
+	function (subs, request, oldTime) {
+		return {oldTime: oldTime, request: request, subs: subs};
+	});
+var elm$core$Task$succeed = _Scheduler_succeed;
+var elm$browser$Browser$AnimationManager$init = elm$core$Task$succeed(
+	A3(elm$browser$Browser$AnimationManager$State, _List_Nil, elm$core$Maybe$Nothing, 0));
+var elm$browser$Browser$External = function (a) {
+	return {$: 'External', a: a};
+};
+var elm$browser$Browser$Internal = function (a) {
+	return {$: 'Internal', a: a};
+};
+var elm$browser$Browser$Dom$NotFound = function (a) {
+	return {$: 'NotFound', a: a};
+};
+var elm$core$Basics$never = function (_n0) {
+	never:
+	while (true) {
+		var nvr = _n0.a;
+		var $temp$_n0 = nvr;
+		_n0 = $temp$_n0;
+		continue never;
+	}
+};
+var elm$core$Maybe$Just = function (a) {
+	return {$: 'Just', a: a};
+};
 var elm$core$Basics$True = {$: 'True'};
 var elm$core$Result$isOk = function (result) {
 	if (result.$ === 'Ok') {
@@ -4802,8 +6457,111 @@ var elm$core$Result$isOk = function (result) {
 		return false;
 	}
 };
-var elm$core$Maybe$Just = function (a) {
-	return {$: 'Just', a: a};
+var elm$core$Task$Perform = function (a) {
+	return {$: 'Perform', a: a};
+};
+var elm$core$Task$init = elm$core$Task$succeed(_Utils_Tuple0);
+var elm$core$List$foldrHelper = F4(
+	function (fn, acc, ctr, ls) {
+		if (!ls.b) {
+			return acc;
+		} else {
+			var a = ls.a;
+			var r1 = ls.b;
+			if (!r1.b) {
+				return A2(fn, a, acc);
+			} else {
+				var b = r1.a;
+				var r2 = r1.b;
+				if (!r2.b) {
+					return A2(
+						fn,
+						a,
+						A2(fn, b, acc));
+				} else {
+					var c = r2.a;
+					var r3 = r2.b;
+					if (!r3.b) {
+						return A2(
+							fn,
+							a,
+							A2(
+								fn,
+								b,
+								A2(fn, c, acc)));
+					} else {
+						var d = r3.a;
+						var r4 = r3.b;
+						var res = (ctr > 500) ? A3(
+							elm$core$List$foldl,
+							fn,
+							acc,
+							elm$core$List$reverse(r4)) : A4(elm$core$List$foldrHelper, fn, acc, ctr + 1, r4);
+						return A2(
+							fn,
+							a,
+							A2(
+								fn,
+								b,
+								A2(
+									fn,
+									c,
+									A2(fn, d, res))));
+					}
+				}
+			}
+		}
+	});
+var elm$core$List$foldr = F3(
+	function (fn, acc, ls) {
+		return A4(elm$core$List$foldrHelper, fn, acc, 0, ls);
+	});
+var elm$core$List$map = F2(
+	function (f, xs) {
+		return A3(
+			elm$core$List$foldr,
+			F2(
+				function (x, acc) {
+					return A2(
+						elm$core$List$cons,
+						f(x),
+						acc);
+				}),
+			_List_Nil,
+			xs);
+	});
+var elm$core$Task$andThen = _Scheduler_andThen;
+var elm$core$Task$map = F2(
+	function (func, taskA) {
+		return A2(
+			elm$core$Task$andThen,
+			function (a) {
+				return elm$core$Task$succeed(
+					func(a));
+			},
+			taskA);
+	});
+var elm$core$Task$map2 = F3(
+	function (func, taskA, taskB) {
+		return A2(
+			elm$core$Task$andThen,
+			function (a) {
+				return A2(
+					elm$core$Task$andThen,
+					function (b) {
+						return elm$core$Task$succeed(
+							A2(func, a, b));
+					},
+					taskB);
+			},
+			taskA);
+	});
+var elm$core$Task$sequence = function (tasks) {
+	return A3(
+		elm$core$List$foldr,
+		elm$core$Task$map2(elm$core$List$cons),
+		elm$core$Task$succeed(_List_Nil),
+		tasks);
 };
 var elm$core$Result$Err = function (a) {
 	return {$: 'Err', a: a};
@@ -5016,187 +6774,6 @@ var elm$json$Json$Decode$errorToStringHelp = F2(
 			}
 		}
 	});
-var elm$core$Platform$Cmd$batch = _Platform_batch;
-var elm$core$Platform$Cmd$none = elm$core$Platform$Cmd$batch(_List_Nil);
-var author$project$MapEditor$init = function (_n0) {
-	var windowWidth = _n0.a;
-	var windowHeight = _n0.b;
-	var defaultMapWidth = 20;
-	var defaultMapHeight = 20;
-	var initLayer = A3(author$project$MapEditor$makeLayerWithDefaultMinMax, author$project$MapEditor$defaultLayerName, defaultMapWidth, defaultMapHeight);
-	var initGridEditor = A3(
-		author$project$MapEditor$makeGridEditor,
-		initLayer,
-		author$project$MapEditor$gridEditorPaneWidth(windowWidth),
-		author$project$MapEditor$gridEditorPaneHeight(windowHeight));
-	var initLayerSelection = author$project$LayerSelection$singleton(initLayer);
-	return _Utils_Tuple2(
-		{dialog: elm$core$Maybe$Nothing, gridEditor: initGridEditor, layerSelection: initLayerSelection, mapHeight: defaultMapHeight, mapWidth: defaultMapWidth, name: 'untitled', windowHeight: windowHeight, windowWidth: windowWidth},
-		elm$core$Platform$Cmd$none);
-};
-var author$project$MapEditor$WindowResize = F2(
-	function (a, b) {
-		return {$: 'WindowResize', a: a, b: b};
-	});
-var elm$browser$Browser$Events$Window = {$: 'Window'};
-var elm$browser$Browser$Events$MySub = F3(
-	function (a, b, c) {
-		return {$: 'MySub', a: a, b: b, c: c};
-	});
-var elm$browser$Browser$Events$State = F2(
-	function (subs, pids) {
-		return {pids: pids, subs: subs};
-	});
-var elm$core$Dict$RBEmpty_elm_builtin = {$: 'RBEmpty_elm_builtin'};
-var elm$core$Dict$empty = elm$core$Dict$RBEmpty_elm_builtin;
-var elm$core$Task$succeed = _Scheduler_succeed;
-var elm$browser$Browser$Events$init = elm$core$Task$succeed(
-	A2(elm$browser$Browser$Events$State, _List_Nil, elm$core$Dict$empty));
-var elm$browser$Browser$Events$nodeToKey = function (node) {
-	if (node.$ === 'Document') {
-		return 'd_';
-	} else {
-		return 'w_';
-	}
-};
-var elm$browser$Browser$Events$addKey = function (sub) {
-	var node = sub.a;
-	var name = sub.b;
-	return _Utils_Tuple2(
-		_Utils_ap(
-			elm$browser$Browser$Events$nodeToKey(node),
-			name),
-		sub);
-};
-var elm$browser$Browser$Events$Event = F2(
-	function (key, event) {
-		return {event: event, key: key};
-	});
-var elm$core$Platform$sendToSelf = _Platform_sendToSelf;
-var elm$core$Task$andThen = _Scheduler_andThen;
-var elm$core$Task$map = F2(
-	function (func, taskA) {
-		return A2(
-			elm$core$Task$andThen,
-			function (a) {
-				return elm$core$Task$succeed(
-					func(a));
-			},
-			taskA);
-	});
-var elm$browser$Browser$External = function (a) {
-	return {$: 'External', a: a};
-};
-var elm$browser$Browser$Internal = function (a) {
-	return {$: 'Internal', a: a};
-};
-var elm$browser$Browser$Dom$NotFound = function (a) {
-	return {$: 'NotFound', a: a};
-};
-var elm$core$Basics$never = function (_n0) {
-	never:
-	while (true) {
-		var nvr = _n0.a;
-		var $temp$_n0 = nvr;
-		_n0 = $temp$_n0;
-		continue never;
-	}
-};
-var elm$core$Task$Perform = function (a) {
-	return {$: 'Perform', a: a};
-};
-var elm$core$Task$init = elm$core$Task$succeed(_Utils_Tuple0);
-var elm$core$List$foldrHelper = F4(
-	function (fn, acc, ctr, ls) {
-		if (!ls.b) {
-			return acc;
-		} else {
-			var a = ls.a;
-			var r1 = ls.b;
-			if (!r1.b) {
-				return A2(fn, a, acc);
-			} else {
-				var b = r1.a;
-				var r2 = r1.b;
-				if (!r2.b) {
-					return A2(
-						fn,
-						a,
-						A2(fn, b, acc));
-				} else {
-					var c = r2.a;
-					var r3 = r2.b;
-					if (!r3.b) {
-						return A2(
-							fn,
-							a,
-							A2(
-								fn,
-								b,
-								A2(fn, c, acc)));
-					} else {
-						var d = r3.a;
-						var r4 = r3.b;
-						var res = (ctr > 500) ? A3(
-							elm$core$List$foldl,
-							fn,
-							acc,
-							elm$core$List$reverse(r4)) : A4(elm$core$List$foldrHelper, fn, acc, ctr + 1, r4);
-						return A2(
-							fn,
-							a,
-							A2(
-								fn,
-								b,
-								A2(
-									fn,
-									c,
-									A2(fn, d, res))));
-					}
-				}
-			}
-		}
-	});
-var elm$core$List$foldr = F3(
-	function (fn, acc, ls) {
-		return A4(elm$core$List$foldrHelper, fn, acc, 0, ls);
-	});
-var elm$core$List$map = F2(
-	function (f, xs) {
-		return A3(
-			elm$core$List$foldr,
-			F2(
-				function (x, acc) {
-					return A2(
-						elm$core$List$cons,
-						f(x),
-						acc);
-				}),
-			_List_Nil,
-			xs);
-	});
-var elm$core$Task$map2 = F3(
-	function (func, taskA, taskB) {
-		return A2(
-			elm$core$Task$andThen,
-			function (a) {
-				return A2(
-					elm$core$Task$andThen,
-					function (b) {
-						return elm$core$Task$succeed(
-							A2(func, a, b));
-					},
-					taskB);
-			},
-			taskA);
-	});
-var elm$core$Task$sequence = function (tasks) {
-	return A3(
-		elm$core$List$foldr,
-		elm$core$Task$map2(elm$core$List$cons),
-		elm$core$Task$succeed(_List_Nil),
-		tasks);
-};
 var elm$core$Platform$sendToApp = _Platform_sendToApp;
 var elm$core$Task$spawnCmd = F2(
 	function (router, _n0) {
@@ -5382,390 +6959,128 @@ var elm$url$Url$fromString = function (str) {
 		elm$url$Url$Https,
 		A2(elm$core$String$dropLeft, 8, str)) : elm$core$Maybe$Nothing);
 };
-var elm$browser$Browser$Events$spawn = F3(
-	function (router, key, _n0) {
-		var node = _n0.a;
-		var name = _n0.b;
-		var actualNode = function () {
-			if (node.$ === 'Document') {
-				return _Browser_doc;
-			} else {
-				return _Browser_window;
-			}
-		}();
-		return A2(
-			elm$core$Task$map,
-			function (value) {
-				return _Utils_Tuple2(key, value);
-			},
-			A3(
-				_Browser_on,
-				actualNode,
-				name,
-				function (event) {
-					return A2(
-						elm$core$Platform$sendToSelf,
-						router,
-						A2(elm$browser$Browser$Events$Event, key, event));
-				}));
-	});
-var elm$core$Dict$Black = {$: 'Black'};
-var elm$core$Dict$RBNode_elm_builtin = F5(
-	function (a, b, c, d, e) {
-		return {$: 'RBNode_elm_builtin', a: a, b: b, c: c, d: d, e: e};
-	});
-var elm$core$Basics$compare = _Utils_compare;
-var elm$core$Dict$Red = {$: 'Red'};
-var elm$core$Dict$balance = F5(
-	function (color, key, value, left, right) {
-		if ((right.$ === 'RBNode_elm_builtin') && (right.a.$ === 'Red')) {
-			var _n1 = right.a;
-			var rK = right.b;
-			var rV = right.c;
-			var rLeft = right.d;
-			var rRight = right.e;
-			if ((left.$ === 'RBNode_elm_builtin') && (left.a.$ === 'Red')) {
-				var _n3 = left.a;
-				var lK = left.b;
-				var lV = left.c;
-				var lLeft = left.d;
-				var lRight = left.e;
-				return A5(
-					elm$core$Dict$RBNode_elm_builtin,
-					elm$core$Dict$Red,
-					key,
-					value,
-					A5(elm$core$Dict$RBNode_elm_builtin, elm$core$Dict$Black, lK, lV, lLeft, lRight),
-					A5(elm$core$Dict$RBNode_elm_builtin, elm$core$Dict$Black, rK, rV, rLeft, rRight));
-			} else {
-				return A5(
-					elm$core$Dict$RBNode_elm_builtin,
-					color,
-					rK,
-					rV,
-					A5(elm$core$Dict$RBNode_elm_builtin, elm$core$Dict$Red, key, value, left, rLeft),
-					rRight);
-			}
-		} else {
-			if ((((left.$ === 'RBNode_elm_builtin') && (left.a.$ === 'Red')) && (left.d.$ === 'RBNode_elm_builtin')) && (left.d.a.$ === 'Red')) {
-				var _n5 = left.a;
-				var lK = left.b;
-				var lV = left.c;
-				var _n6 = left.d;
-				var _n7 = _n6.a;
-				var llK = _n6.b;
-				var llV = _n6.c;
-				var llLeft = _n6.d;
-				var llRight = _n6.e;
-				var lRight = left.e;
-				return A5(
-					elm$core$Dict$RBNode_elm_builtin,
-					elm$core$Dict$Red,
-					lK,
-					lV,
-					A5(elm$core$Dict$RBNode_elm_builtin, elm$core$Dict$Black, llK, llV, llLeft, llRight),
-					A5(elm$core$Dict$RBNode_elm_builtin, elm$core$Dict$Black, key, value, lRight, right));
-			} else {
-				return A5(elm$core$Dict$RBNode_elm_builtin, color, key, value, left, right);
-			}
-		}
-	});
-var elm$core$Dict$insertHelp = F3(
-	function (key, value, dict) {
-		if (dict.$ === 'RBEmpty_elm_builtin') {
-			return A5(elm$core$Dict$RBNode_elm_builtin, elm$core$Dict$Red, key, value, elm$core$Dict$RBEmpty_elm_builtin, elm$core$Dict$RBEmpty_elm_builtin);
-		} else {
-			var nColor = dict.a;
-			var nKey = dict.b;
-			var nValue = dict.c;
-			var nLeft = dict.d;
-			var nRight = dict.e;
-			var _n1 = A2(elm$core$Basics$compare, key, nKey);
-			switch (_n1.$) {
-				case 'LT':
-					return A5(
-						elm$core$Dict$balance,
-						nColor,
-						nKey,
-						nValue,
-						A3(elm$core$Dict$insertHelp, key, value, nLeft),
-						nRight);
-				case 'EQ':
-					return A5(elm$core$Dict$RBNode_elm_builtin, nColor, nKey, value, nLeft, nRight);
-				default:
-					return A5(
-						elm$core$Dict$balance,
-						nColor,
-						nKey,
-						nValue,
-						nLeft,
-						A3(elm$core$Dict$insertHelp, key, value, nRight));
-			}
-		}
-	});
-var elm$core$Dict$insert = F3(
-	function (key, value, dict) {
-		var _n0 = A3(elm$core$Dict$insertHelp, key, value, dict);
-		if ((_n0.$ === 'RBNode_elm_builtin') && (_n0.a.$ === 'Red')) {
-			var _n1 = _n0.a;
-			var k = _n0.b;
-			var v = _n0.c;
-			var l = _n0.d;
-			var r = _n0.e;
-			return A5(elm$core$Dict$RBNode_elm_builtin, elm$core$Dict$Black, k, v, l, r);
-		} else {
-			var x = _n0;
-			return x;
-		}
-	});
-var elm$core$Dict$fromList = function (assocs) {
-	return A3(
-		elm$core$List$foldl,
-		F2(
-			function (_n0, dict) {
-				var key = _n0.a;
-				var value = _n0.b;
-				return A3(elm$core$Dict$insert, key, value, dict);
-			}),
-		elm$core$Dict$empty,
-		assocs);
-};
-var elm$core$Dict$foldl = F3(
-	function (func, acc, dict) {
-		foldl:
-		while (true) {
-			if (dict.$ === 'RBEmpty_elm_builtin') {
-				return acc;
-			} else {
-				var key = dict.b;
-				var value = dict.c;
-				var left = dict.d;
-				var right = dict.e;
-				var $temp$func = func,
-					$temp$acc = A3(
-					func,
-					key,
-					value,
-					A3(elm$core$Dict$foldl, func, acc, left)),
-					$temp$dict = right;
-				func = $temp$func;
-				acc = $temp$acc;
-				dict = $temp$dict;
-				continue foldl;
-			}
-		}
-	});
-var elm$core$Dict$merge = F6(
-	function (leftStep, bothStep, rightStep, leftDict, rightDict, initialResult) {
-		var stepState = F3(
-			function (rKey, rValue, _n0) {
-				stepState:
-				while (true) {
-					var list = _n0.a;
-					var result = _n0.b;
-					if (!list.b) {
-						return _Utils_Tuple2(
-							list,
-							A3(rightStep, rKey, rValue, result));
-					} else {
-						var _n2 = list.a;
-						var lKey = _n2.a;
-						var lValue = _n2.b;
-						var rest = list.b;
-						if (_Utils_cmp(lKey, rKey) < 0) {
-							var $temp$rKey = rKey,
-								$temp$rValue = rValue,
-								$temp$_n0 = _Utils_Tuple2(
-								rest,
-								A3(leftStep, lKey, lValue, result));
-							rKey = $temp$rKey;
-							rValue = $temp$rValue;
-							_n0 = $temp$_n0;
-							continue stepState;
-						} else {
-							if (_Utils_cmp(lKey, rKey) > 0) {
-								return _Utils_Tuple2(
-									list,
-									A3(rightStep, rKey, rValue, result));
-							} else {
-								return _Utils_Tuple2(
-									rest,
-									A4(bothStep, lKey, lValue, rValue, result));
-							}
-						}
-					}
-				}
-			});
-		var _n3 = A3(
-			elm$core$Dict$foldl,
-			stepState,
-			_Utils_Tuple2(
-				elm$core$Dict$toList(leftDict),
-				initialResult),
-			rightDict);
-		var leftovers = _n3.a;
-		var intermediateResult = _n3.b;
-		return A3(
-			elm$core$List$foldl,
-			F2(
-				function (_n4, result) {
-					var k = _n4.a;
-					var v = _n4.b;
-					return A3(leftStep, k, v, result);
-				}),
-			intermediateResult,
-			leftovers);
-	});
-var elm$core$Dict$union = F2(
-	function (t1, t2) {
-		return A3(elm$core$Dict$foldl, elm$core$Dict$insert, t2, t1);
-	});
+var elm$browser$Browser$AnimationManager$now = _Browser_now(_Utils_Tuple0);
+var elm$browser$Browser$AnimationManager$rAF = _Browser_rAF(_Utils_Tuple0);
+var elm$core$Platform$sendToSelf = _Platform_sendToSelf;
 var elm$core$Process$kill = _Scheduler_kill;
-var elm$browser$Browser$Events$onEffects = F3(
-	function (router, subs, state) {
-		var stepRight = F3(
-			function (key, sub, _n6) {
-				var deads = _n6.a;
-				var lives = _n6.b;
-				var news = _n6.c;
-				return _Utils_Tuple3(
-					deads,
-					lives,
-					A2(
-						elm$core$List$cons,
-						A3(elm$browser$Browser$Events$spawn, router, key, sub),
-						news));
-			});
-		var stepLeft = F3(
-			function (_n4, pid, _n5) {
-				var deads = _n5.a;
-				var lives = _n5.b;
-				var news = _n5.c;
-				return _Utils_Tuple3(
-					A2(elm$core$List$cons, pid, deads),
-					lives,
-					news);
-			});
-		var stepBoth = F4(
-			function (key, pid, _n2, _n3) {
-				var deads = _n3.a;
-				var lives = _n3.b;
-				var news = _n3.c;
-				return _Utils_Tuple3(
-					deads,
-					A3(elm$core$Dict$insert, key, pid, lives),
-					news);
-			});
-		var newSubs = A2(elm$core$List$map, elm$browser$Browser$Events$addKey, subs);
-		var _n0 = A6(
-			elm$core$Dict$merge,
-			stepLeft,
-			stepBoth,
-			stepRight,
-			state.pids,
-			elm$core$Dict$fromList(newSubs),
-			_Utils_Tuple3(_List_Nil, elm$core$Dict$empty, _List_Nil));
-		var deadPids = _n0.a;
-		var livePids = _n0.b;
-		var makeNewPids = _n0.c;
-		return A2(
-			elm$core$Task$andThen,
-			function (pids) {
-				return elm$core$Task$succeed(
-					A2(
-						elm$browser$Browser$Events$State,
-						newSubs,
+var elm$core$Process$spawn = _Scheduler_spawn;
+var elm$browser$Browser$AnimationManager$onEffects = F3(
+	function (router, subs, _n0) {
+		var request = _n0.request;
+		var oldTime = _n0.oldTime;
+		var _n1 = _Utils_Tuple2(request, subs);
+		if (_n1.a.$ === 'Nothing') {
+			if (!_n1.b.b) {
+				var _n2 = _n1.a;
+				return elm$browser$Browser$AnimationManager$init;
+			} else {
+				var _n4 = _n1.a;
+				return A2(
+					elm$core$Task$andThen,
+					function (pid) {
+						return A2(
+							elm$core$Task$andThen,
+							function (time) {
+								return elm$core$Task$succeed(
+									A3(
+										elm$browser$Browser$AnimationManager$State,
+										subs,
+										elm$core$Maybe$Just(pid),
+										time));
+							},
+							elm$browser$Browser$AnimationManager$now);
+					},
+					elm$core$Process$spawn(
 						A2(
-							elm$core$Dict$union,
-							livePids,
-							elm$core$Dict$fromList(pids))));
-			},
-			A2(
-				elm$core$Task$andThen,
-				function (_n1) {
-					return elm$core$Task$sequence(makeNewPids);
-				},
-				elm$core$Task$sequence(
-					A2(elm$core$List$map, elm$core$Process$kill, deadPids))));
-	});
-var elm$core$List$maybeCons = F3(
-	function (f, mx, xs) {
-		var _n0 = f(mx);
-		if (_n0.$ === 'Just') {
-			var x = _n0.a;
-			return A2(elm$core$List$cons, x, xs);
+							elm$core$Task$andThen,
+							elm$core$Platform$sendToSelf(router),
+							elm$browser$Browser$AnimationManager$rAF)));
+			}
 		} else {
-			return xs;
+			if (!_n1.b.b) {
+				var pid = _n1.a.a;
+				return A2(
+					elm$core$Task$andThen,
+					function (_n3) {
+						return elm$browser$Browser$AnimationManager$init;
+					},
+					elm$core$Process$kill(pid));
+			} else {
+				return elm$core$Task$succeed(
+					A3(elm$browser$Browser$AnimationManager$State, subs, request, oldTime));
+			}
 		}
 	});
-var elm$core$List$filterMap = F2(
-	function (f, xs) {
-		return A3(
-			elm$core$List$foldr,
-			elm$core$List$maybeCons(f),
-			_List_Nil,
-			xs);
-	});
-var elm$browser$Browser$Events$onSelfMsg = F3(
-	function (router, _n0, state) {
-		var key = _n0.key;
-		var event = _n0.event;
-		var toMessage = function (_n2) {
-			var subKey = _n2.a;
-			var _n3 = _n2.b;
-			var node = _n3.a;
-			var name = _n3.b;
-			var decoder = _n3.c;
-			return _Utils_eq(subKey, key) ? A2(_Browser_decodeEvent, decoder, event) : elm$core$Maybe$Nothing;
+var elm$time$Time$Posix = function (a) {
+	return {$: 'Posix', a: a};
+};
+var elm$time$Time$millisToPosix = elm$time$Time$Posix;
+var elm$browser$Browser$AnimationManager$onSelfMsg = F3(
+	function (router, newTime, _n0) {
+		var subs = _n0.subs;
+		var oldTime = _n0.oldTime;
+		var send = function (sub) {
+			if (sub.$ === 'Time') {
+				var tagger = sub.a;
+				return A2(
+					elm$core$Platform$sendToApp,
+					router,
+					tagger(
+						elm$time$Time$millisToPosix(newTime)));
+			} else {
+				var tagger = sub.a;
+				return A2(
+					elm$core$Platform$sendToApp,
+					router,
+					tagger(newTime - oldTime));
+			}
 		};
-		var messages = A2(elm$core$List$filterMap, toMessage, state.subs);
 		return A2(
 			elm$core$Task$andThen,
-			function (_n1) {
-				return elm$core$Task$succeed(state);
+			function (pid) {
+				return A2(
+					elm$core$Task$andThen,
+					function (_n1) {
+						return elm$core$Task$succeed(
+							A3(
+								elm$browser$Browser$AnimationManager$State,
+								subs,
+								elm$core$Maybe$Just(pid),
+								newTime));
+					},
+					elm$core$Task$sequence(
+						A2(elm$core$List$map, send, subs)));
 			},
-			elm$core$Task$sequence(
+			elm$core$Process$spawn(
 				A2(
-					elm$core$List$map,
-					elm$core$Platform$sendToApp(router),
-					messages)));
+					elm$core$Task$andThen,
+					elm$core$Platform$sendToSelf(router),
+					elm$browser$Browser$AnimationManager$rAF)));
 	});
-var elm$browser$Browser$Events$subMap = F2(
-	function (func, _n0) {
-		var node = _n0.a;
-		var name = _n0.b;
-		var decoder = _n0.c;
-		return A3(
-			elm$browser$Browser$Events$MySub,
-			node,
-			name,
-			A2(elm$json$Json$Decode$map, func, decoder));
-	});
-_Platform_effectManagers['Browser.Events'] = _Platform_createManager(elm$browser$Browser$Events$init, elm$browser$Browser$Events$onEffects, elm$browser$Browser$Events$onSelfMsg, 0, elm$browser$Browser$Events$subMap);
-var elm$browser$Browser$Events$subscription = _Platform_leaf('Browser.Events');
-var elm$browser$Browser$Events$on = F3(
-	function (node, name, decoder) {
-		return elm$browser$Browser$Events$subscription(
-			A3(elm$browser$Browser$Events$MySub, node, name, decoder));
-	});
-var elm$json$Json$Decode$field = _Json_decodeField;
-var elm$json$Json$Decode$int = _Json_decodeInt;
-var elm$browser$Browser$Events$onResize = function (func) {
-	return A3(
-		elm$browser$Browser$Events$on,
-		elm$browser$Browser$Events$Window,
-		'resize',
-		A2(
-			elm$json$Json$Decode$field,
-			'target',
-			A3(
-				elm$json$Json$Decode$map2,
-				func,
-				A2(elm$json$Json$Decode$field, 'innerWidth', elm$json$Json$Decode$int),
-				A2(elm$json$Json$Decode$field, 'innerHeight', elm$json$Json$Decode$int))));
+var elm$browser$Browser$AnimationManager$Time = function (a) {
+	return {$: 'Time', a: a};
 };
+var elm$browser$Browser$AnimationManager$subMap = F2(
+	function (func, sub) {
+		if (sub.$ === 'Time') {
+			var tagger = sub.a;
+			return elm$browser$Browser$AnimationManager$Time(
+				A2(elm$core$Basics$composeL, func, tagger));
+		} else {
+			var tagger = sub.a;
+			return elm$browser$Browser$AnimationManager$Delta(
+				A2(elm$core$Basics$composeL, func, tagger));
+		}
+	});
+_Platform_effectManagers['Browser.AnimationManager'] = _Platform_createManager(elm$browser$Browser$AnimationManager$init, elm$browser$Browser$AnimationManager$onEffects, elm$browser$Browser$AnimationManager$onSelfMsg, 0, elm$browser$Browser$AnimationManager$subMap);
+var elm$browser$Browser$AnimationManager$subscription = _Platform_leaf('Browser.AnimationManager');
+var elm$browser$Browser$AnimationManager$onAnimationFrameDelta = function (tagger) {
+	return elm$browser$Browser$AnimationManager$subscription(
+		elm$browser$Browser$AnimationManager$Delta(tagger));
+};
+var elm$browser$Browser$Events$onAnimationFrameDelta = elm$browser$Browser$AnimationManager$onAnimationFrameDelta;
 var author$project$MapEditor$subscriptions = function (_n0) {
-	return elm$browser$Browser$Events$onResize(author$project$MapEditor$WindowResize);
+	return elm$browser$Browser$Events$onAnimationFrameDelta(author$project$MapEditor$ElapsedTime);
 };
 var author$project$DiscreteGradientEditor$State = function (a) {
 	return {$: 'State', a: a};
@@ -6280,6 +7595,10 @@ var author$project$DiscreteGradientEditor$resetSelectedColor = function (model) 
 			selectedColor: A2(author$project$DiscreteGradient$getColorAt, model.selectedValue, model.gradient)
 		});
 };
+var elm$core$Basics$min = F2(
+	function (x, y) {
+		return (_Utils_cmp(x, y) < 0) ? x : y;
+	});
 var author$project$DiscreteGradientEditor$boundInt = F2(
 	function (lowerBound, upperBound) {
 		return A2(
@@ -6704,38 +8023,146 @@ var author$project$DiscreteGradientEditor$update = F2(
 			author$project$DiscreteGradientEditor$State,
 			A2(author$project$DiscreteGradientEditor$update_, msg, model));
 	});
-var author$project$GridEditor$update_ = F2(
-	function (msg, model) {
-		return _Utils_Tuple2(model, model.grid);
+var author$project$GridEditor$zoomFactorPerStep = 1.333;
+var author$project$GridEditor$cameraBounds = F4(
+	function (_n0, canvasWidth, canvasHeight, zoomStep) {
+		var cameraCenterX = _n0.a;
+		var cameraCenterY = _n0.b;
+		var zoomFactor = A2(elm$core$Basics$pow, author$project$GridEditor$zoomFactorPerStep, zoomStep);
+		var pixelsPerSceneUnit = 250.0;
+		var cameraWidth = (canvasWidth / pixelsPerSceneUnit) * zoomFactor;
+		var cameraHeight = (canvasHeight / pixelsPerSceneUnit) * zoomFactor;
+		return {bottom: (((-1) * cameraHeight) / 2.0) + cameraCenterY, left: (((-1) * cameraWidth) / 2.0) + cameraCenterX, right: (cameraWidth / 2.0) + cameraCenterX, top: (cameraHeight / 2.0) + cameraCenterY};
 	});
+var author$project$GridEditor$PanAction = function (a) {
+	return {$: 'PanAction', a: a};
+};
+var author$project$GridEditor$initPanAction = F2(
+	function (cameraCenter, mousePosition) {
+		return author$project$GridEditor$PanAction(
+			{lastCameraCenter: cameraCenter, lastMousePosition: mousePosition});
+	});
+var author$project$GridEditor$mouseToScenePos = F4(
+	function (bounds, canvasWidth, canvasHeight, _n0) {
+		var mouseX = _n0.a;
+		var mouseY = _n0.b;
+		var cameraWidth = bounds.right - bounds.left;
+		var x = ((mouseX / canvasWidth) * cameraWidth) + bounds.left;
+		var cameraHeight = bounds.top - bounds.bottom;
+		var y = ((mouseY / canvasHeight) * cameraHeight) + bounds.bottom;
+		return _Utils_Tuple2(x, y);
+	});
+var author$project$GridEditor$stopAction = function (model) {
+	return _Utils_update(
+		model,
+		{activeAction: elm$core$Maybe$Nothing});
+};
 var elm$core$Debug$log = _Debug_log;
-var author$project$GridEditor$update = F2(
-	function (msg, _n0) {
-		var model = _n0.a;
-		return A2(
-			elm$core$Debug$log,
-			'State',
-			A2(
-				elm$core$Tuple$mapFirst,
-				author$project$GridEditor$State,
-				A2(author$project$GridEditor$update_, msg, model)));
-	});
-var author$project$GridEditor$updatePaneSize = F3(
-	function (paneWidth, paneHeight, _n0) {
-		var model = _n0.a;
-		return A2(
-			elm$core$Debug$log,
-			'State',
-			author$project$GridEditor$State(
-				_Utils_update(
-					model,
-					{paneHeight: paneHeight, paneWidth: paneWidth})));
-	});
-var author$project$Grid$toColumn = elm$core$Tuple$first;
 var elm$core$Tuple$second = function (_n0) {
 	var y = _n0.b;
 	return y;
 };
+var author$project$GridEditor$update_ = F2(
+	function (msg, model) {
+		switch (msg.$) {
+			case 'Resize':
+				var w = msg.a;
+				var h = msg.b;
+				return _Utils_update(
+					model,
+					{height: h, width: w});
+			case 'Scroll':
+				var dy = msg.a;
+				return _Utils_update(
+					model,
+					{zoomStepDestination: model.zoomStepDestination + (dy / 50.0)});
+			case 'MouseDown':
+				var button = msg.a;
+				var pos = msg.b;
+				return A2(
+					elm$core$Debug$log,
+					'MouseDown',
+					function () {
+						if (button.$ === 'MiddleButton') {
+							return _Utils_update(
+								model,
+								{
+									activeAction: elm$core$Maybe$Just(
+										A2(author$project$GridEditor$initPanAction, model.cameraCenter, pos))
+								});
+						} else {
+							return model;
+						}
+					}());
+			case 'MouseUp':
+				return author$project$GridEditor$stopAction(model);
+			case 'MouseMove':
+				var pos = msg.a;
+				return A2(
+					elm$core$Debug$log,
+					'MouseMove',
+					function () {
+						var _n2 = model.activeAction;
+						if (_n2.$ === 'Just') {
+							var panState = _n2.a.a;
+							var bounds = A4(author$project$GridEditor$cameraBounds, model.cameraCenter, model.width, model.height, model.zoomStep);
+							var currentMousePosInScene = A4(author$project$GridEditor$mouseToScenePos, bounds, model.width, model.height, pos);
+							var lastMousePosInScene = A4(author$project$GridEditor$mouseToScenePos, bounds, model.width, model.height, panState.lastMousePosition);
+							var deltaX = currentMousePosInScene.a - lastMousePosInScene.a;
+							var deltaY = lastMousePosInScene.b - currentMousePosInScene.b;
+							var newCameraCenter = _Utils_Tuple2(model.cameraCenter.a - deltaX, model.cameraCenter.b - deltaY);
+							return _Utils_update(
+								model,
+								{
+									activeAction: elm$core$Maybe$Just(
+										A2(author$project$GridEditor$initPanAction, newCameraCenter, pos)),
+									cameraCenter: newCameraCenter
+								});
+						} else {
+							return model;
+						}
+					}());
+			default:
+				var _n3 = A2(elm$core$Debug$log, 'MouseLeave', '');
+				return author$project$GridEditor$stopAction(model);
+		}
+	});
+var author$project$GridEditor$update = F2(
+	function (msg, _n0) {
+		var model = _n0.a;
+		return _Utils_Tuple2(
+			author$project$GridEditor$State(
+				A2(author$project$GridEditor$update_, msg, model)),
+			model.grid);
+	});
+var author$project$GridEditor$secondsPerZoomStep = 0.1;
+var author$project$GridEditor$updateWithElapsedTime = F2(
+	function (t, _n0) {
+		var model = _n0.a;
+		return author$project$GridEditor$State(
+			_Utils_update(
+				model,
+				{
+					currentTime: model.currentTime + t,
+					zoomStep: function () {
+						if (_Utils_eq(model.zoomStep, model.zoomStepDestination)) {
+							return model.zoomStep;
+						} else {
+							var dStep = (t / 1000.0) / author$project$GridEditor$secondsPerZoomStep;
+							return (_Utils_cmp(model.zoomStep, model.zoomStepDestination) < 0) ? A2(elm$core$Basics$min, model.zoomStepDestination, model.zoomStep + dStep) : A2(elm$core$Basics$max, model.zoomStepDestination, model.zoomStep - dStep);
+						}
+					}()
+				}));
+	});
+var author$project$Layer$getMax = function (_n0) {
+	var inner = _n0.a;
+	return inner.max;
+};
+var author$project$Layer$getMin = function (_n0) {
+	var inner = _n0.a;
+	return inner.min;
+};
+var author$project$Grid$toColumn = elm$core$Tuple$first;
 var author$project$Grid$toRow = elm$core$Tuple$second;
 var elm$core$Bitwise$shiftRightZfBy = _Bitwise_shiftRightZfBy;
 var elm$core$Array$bitMask = 4294967295 >>> (32 - elm$core$Array$shiftStep);
@@ -6904,6 +8331,38 @@ var author$project$Layer$setColorGradient = F2(
 			_Utils_update(
 				inner,
 				{colorGradient: newGradient}));
+	});
+var elm$core$Elm$JsArray$map = _JsArray_map;
+var elm$core$Array$map = F2(
+	function (func, _n0) {
+		var len = _n0.a;
+		var startShift = _n0.b;
+		var tree = _n0.c;
+		var tail = _n0.d;
+		var helper = function (node) {
+			if (node.$ === 'SubTree') {
+				var subTree = node.a;
+				return elm$core$Array$SubTree(
+					A2(elm$core$Elm$JsArray$map, helper, subTree));
+			} else {
+				var values = node.a;
+				return elm$core$Array$Leaf(
+					A2(elm$core$Elm$JsArray$map, func, values));
+			}
+		};
+		return A4(
+			elm$core$Array$Array_elm_builtin,
+			len,
+			startShift,
+			A2(elm$core$Elm$JsArray$map, helper, tree),
+			A2(elm$core$Elm$JsArray$map, func, tail));
+	});
+var author$project$Grid$map = F2(
+	function (f, grid) {
+		return A2(
+			elm$core$Array$map,
+			elm$core$Array$map(f),
+			grid);
 	});
 var author$project$Layer$applyCeilingToGrid = function (ceil) {
 	return author$project$Grid$map(
@@ -7293,24 +8752,6 @@ var author$project$MapEditor$GradientEditorDialog = function (a) {
 var author$project$MapEditor$NewLayerDialog = function (a) {
 	return {$: 'NewLayerDialog', a: a};
 };
-var author$project$GridEditor$updateCellMax = F2(
-	function (cellMax, _n0) {
-		var model = _n0.a;
-		var boundedGrid = A3(author$project$GridEditor$boundGrid, model.cellMin, cellMax, model.grid);
-		return author$project$GridEditor$State(
-			_Utils_update(
-				model,
-				{cellMax: cellMax, grid: boundedGrid}));
-	});
-var author$project$GridEditor$updateCellMin = F2(
-	function (cellMin, _n0) {
-		var model = _n0.a;
-		var boundedGrid = A3(author$project$GridEditor$boundGrid, cellMin, model.cellMax, model.grid);
-		return author$project$GridEditor$State(
-			_Utils_update(
-				model,
-				{cellMin: cellMin, grid: boundedGrid}));
-	});
 var author$project$GridEditor$updateGradient = F2(
 	function (gradient, _n0) {
 		var model = _n0.a;
@@ -7322,14 +8763,10 @@ var author$project$GridEditor$updateGradient = F2(
 var author$project$GridEditor$updateGrid = F2(
 	function (grid, _n0) {
 		var model = _n0.a;
-		var boundedGrid = A3(author$project$GridEditor$boundGrid, model.cellMin, model.cellMax, grid);
-		return A2(
-			elm$core$Debug$log,
-			'State',
-			author$project$GridEditor$State(
-				_Utils_update(
-					model,
-					{grid: boundedGrid})));
+		return author$project$GridEditor$State(
+			_Utils_update(
+				model,
+				{grid: grid}));
 	});
 var author$project$MapEditor$loadSelecteLayerIntoGridEditor = function (state) {
 	var layer = author$project$LayerSelection$selectedLayer(state.layerSelection);
@@ -7342,31 +8779,18 @@ var author$project$MapEditor$loadSelecteLayerIntoGridEditor = function (state) {
 				A2(
 					author$project$GridEditor$updateGrid,
 					author$project$Layer$getGrid(layer),
-					A2(
-						author$project$GridEditor$updateCellMax,
-						author$project$Layer$getMax(layer),
-						A2(
-							author$project$GridEditor$updateCellMin,
-							author$project$Layer$getMin(layer),
-							state.gridEditor))))
+					state.gridEditor))
 		});
 };
 var author$project$MapEditor$update = F2(
 	function (msg, state) {
 		switch (msg.$) {
-			case 'WindowResize':
-				var width = msg.a;
-				var height = msg.b;
+			case 'ElapsedTime':
+				var t = msg.a;
 				return _Utils_update(
 					state,
 					{
-						gridEditor: A3(
-							author$project$GridEditor$updatePaneSize,
-							author$project$MapEditor$gridEditorPaneWidth(width),
-							author$project$MapEditor$gridEditorPaneHeight(height),
-							state.gridEditor),
-						windowHeight: height,
-						windowWidth: width
+						gridEditor: A2(author$project$GridEditor$updateWithElapsedTime, t, state.gridEditor)
 					});
 			case 'SetMapWidth':
 				var w = msg.a;
@@ -7714,6 +9138,8 @@ var simonh1000$elm_colorpicker$ColorPicker$OnMouseDown = F2(
 var simonh1000$elm_colorpicker$ColorPicker$OnMouseUp = {$: 'OnMouseUp'};
 var elm$svg$Svg$Events$on = elm$html$Html$Events$on;
 var elm$core$Basics$neq = _Utils_notEqual;
+var elm$json$Json$Decode$field = _Json_decodeField;
+var elm$json$Json$Decode$int = _Json_decodeInt;
 var elm$json$Json$Decode$map3 = _Json_map3;
 var simonh1000$elm_colorpicker$ColorPicker$MouseInfo = F3(
 	function (x, y, mousePressed) {
@@ -8900,102 +10326,78 @@ var author$project$MapEditor$dialogView = function (dialog) {
 		return _List_Nil;
 	}
 };
-var author$project$GridEditor$borderColor = function (color) {
-	var c = avh4$elm_color$Color$toHsla(color);
-	return A4(
-		avh4$elm_color$Color$hsla,
-		c.hue,
-		A2(elm$core$Basics$min, 1.0, c.saturation + 0.125),
-		A2(elm$core$Basics$max, 0.0, c.lightness - 0.125),
-		c.alpha);
-};
-var timjs$elm_collage$Collage$Flat = {$: 'Flat'};
-var timjs$elm_collage$Collage$Sharp = {$: 'Sharp'};
-var timjs$elm_collage$Collage$thin = 2.0;
-var timjs$elm_collage$Collage$Core$Uniform = function (a) {
-	return {$: 'Uniform', a: a};
-};
-var timjs$elm_collage$Collage$uniform = timjs$elm_collage$Collage$Core$Uniform;
-var timjs$elm_collage$Collage$defaultLineStyle = {
-	cap: timjs$elm_collage$Collage$Flat,
-	dashPattern: _List_Nil,
-	dashPhase: 0,
-	fill: timjs$elm_collage$Collage$uniform(avh4$elm_color$Color$black),
-	join: timjs$elm_collage$Collage$Sharp,
-	thickness: timjs$elm_collage$Collage$thin
-};
-var timjs$elm_collage$Collage$broken = F3(
-	function (dashes, thickness, fill) {
-		return _Utils_update(
-			timjs$elm_collage$Collage$defaultLineStyle,
-			{dashPattern: dashes, fill: fill, thickness: thickness});
-	});
-var timjs$elm_collage$Collage$solid = timjs$elm_collage$Collage$broken(_List_Nil);
-var timjs$elm_collage$Collage$Core$Rectangle = F3(
-	function (a, b, c) {
-		return {$: 'Rectangle', a: a, b: b, c: c};
-	});
-var timjs$elm_collage$Collage$roundedRectangle = timjs$elm_collage$Collage$Core$Rectangle;
-var timjs$elm_collage$Collage$rectangle = F2(
-	function (w, h) {
-		return A3(timjs$elm_collage$Collage$roundedRectangle, w, h, 0);
-	});
-var timjs$elm_collage$Collage$square = function (size) {
-	return A2(timjs$elm_collage$Collage$rectangle, size, size);
-};
-var timjs$elm_collage$Collage$Core$Shape = F2(
+var author$project$GridEditor$MouseDown = F2(
 	function (a, b) {
-		return {$: 'Shape', a: a, b: b};
+		return {$: 'MouseDown', a: a, b: b};
 	});
-var timjs$elm_collage$Collage$Core$collage = function (basic) {
-	return {
-		basic: basic,
-		handlers: _List_Nil,
-		name: elm$core$Maybe$Nothing,
-		opacity: 1,
-		rotation: 0,
-		scale: _Utils_Tuple2(1, 1),
-		shift: _Utils_Tuple2(0, 0)
-	};
+var author$project$GridEditor$MouseLeave = {$: 'MouseLeave'};
+var author$project$GridEditor$MouseMove = function (a) {
+	return {$: 'MouseMove', a: a};
 };
-var timjs$elm_collage$Collage$styled = function (style) {
-	return A2(
-		elm$core$Basics$composeL,
-		timjs$elm_collage$Collage$Core$collage,
-		timjs$elm_collage$Collage$Core$Shape(style));
+var author$project$GridEditor$MouseUp = {$: 'MouseUp'};
+var elm_explorations$linear_algebra$Math$Matrix4$makeOrtho2D = _MJS_m4x4makeOrtho2D;
+var author$project$GridEditor$cameraFromBounds = function (bounds) {
+	return A4(elm_explorations$linear_algebra$Math$Matrix4$makeOrtho2D, bounds.left, bounds.right, bounds.bottom, bounds.top);
 };
-var author$project$GridEditor$cellView = F2(
-	function (gradient, cellValue) {
-		var color = A2(author$project$DiscreteGradient$getColorAt, cellValue, gradient);
-		var fill = timjs$elm_collage$Collage$uniform(color);
-		var border = A2(
-			timjs$elm_collage$Collage$solid,
-			1.5,
-			timjs$elm_collage$Collage$uniform(
-				author$project$GridEditor$borderColor(color)));
-		return A2(
-			timjs$elm_collage$Collage$styled,
-			_Utils_Tuple2(fill, border),
-			timjs$elm_collage$Collage$square(30.5));
+var author$project$GridEditor$fragmentShader = {
+	src: '\n        precision mediump float;\n        varying vec3 vcolor;\n\n        void main () {\n            gl_FragColor = vec4(vcolor, 1.0);\n        }\n    ',
+	attributes: {},
+	uniforms: {}
+};
+var author$project$Grid$coordinate = F2(
+	function (x, y) {
+		return _Utils_Tuple2(x, y);
 	});
-var timjs$elm_collage$Collage$Layout$Right = {$: 'Right'};
-var timjs$elm_collage$Collage$shift = F2(
-	function (_n0, collage) {
-		var dx = _n0.a;
-		var dy = _n0.b;
-		var _n1 = collage.shift;
-		var x = _n1.a;
-		var y = _n1.b;
-		return _Utils_update(
-			collage,
-			{
-				shift: _Utils_Tuple2(x + dx, y + dy)
+var elm$core$Elm$JsArray$foldl = _JsArray_foldl;
+var elm$core$Elm$JsArray$indexedMap = _JsArray_indexedMap;
+var elm$core$Array$indexedMap = F2(
+	function (func, _n0) {
+		var len = _n0.a;
+		var tree = _n0.c;
+		var tail = _n0.d;
+		var initialBuilder = {
+			nodeList: _List_Nil,
+			nodeListSize: 0,
+			tail: A3(
+				elm$core$Elm$JsArray$indexedMap,
+				func,
+				elm$core$Array$tailIndex(len),
+				tail)
+		};
+		var helper = F2(
+			function (node, builder) {
+				if (node.$ === 'SubTree') {
+					var subTree = node.a;
+					return A3(elm$core$Elm$JsArray$foldl, helper, builder, subTree);
+				} else {
+					var leaf = node.a;
+					var offset = builder.nodeListSize * elm$core$Array$branchFactor;
+					var mappedLeaf = elm$core$Array$Leaf(
+						A3(elm$core$Elm$JsArray$indexedMap, func, offset, leaf));
+					return {
+						nodeList: A2(elm$core$List$cons, mappedLeaf, builder.nodeList),
+						nodeListSize: builder.nodeListSize + 1,
+						tail: builder.tail
+					};
+				}
 			});
+		return A2(
+			elm$core$Array$builderToArray,
+			true,
+			A3(elm$core$Elm$JsArray$foldl, helper, initialBuilder, tree));
 	});
-var elm$core$Basics$composeR = F3(
-	function (f, g, x) {
-		return g(
-			f(x));
+var author$project$Grid$mapWithCoordinate = F2(
+	function (f, grid) {
+		return A2(
+			elm$core$Array$indexedMap,
+			function (y) {
+				return elm$core$Array$indexedMap(
+					function (x) {
+						return f(
+							A2(author$project$Grid$coordinate, x, y));
+					});
+			},
+			grid);
 	});
 var elm$core$List$append = F2(
 	function (xs, ys) {
@@ -9008,936 +10410,407 @@ var elm$core$List$append = F2(
 var elm$core$List$concat = function (lists) {
 	return A3(elm$core$List$foldr, elm$core$List$append, _List_Nil, lists);
 };
-var elm$core$List$maximum = function (list) {
-	if (list.b) {
-		var x = list.a;
-		var xs = list.b;
-		return elm$core$Maybe$Just(
-			A3(elm$core$List$foldl, elm$core$Basics$max, x, xs));
-	} else {
-		return elm$core$Maybe$Nothing;
-	}
-};
-var elm$core$List$minimum = function (list) {
-	if (list.b) {
-		var x = list.a;
-		var xs = list.b;
-		return elm$core$Maybe$Just(
-			A3(elm$core$List$foldl, elm$core$Basics$min, x, xs));
-	} else {
-		return elm$core$Maybe$Nothing;
-	}
-};
-var elm$core$List$unzip = function (pairs) {
-	var step = F2(
-		function (_n0, _n1) {
-			var x = _n0.a;
-			var y = _n0.b;
-			var xs = _n1.a;
-			var ys = _n1.b;
-			return _Utils_Tuple2(
-				A2(elm$core$List$cons, x, xs),
-				A2(elm$core$List$cons, y, ys));
-		});
-	return A3(
-		elm$core$List$foldr,
-		step,
-		_Utils_Tuple2(_List_Nil, _List_Nil),
-		pairs);
-};
-var timjs$elm_collage$Collage$Core$Path = F2(
-	function (a, b) {
-		return {$: 'Path', a: a, b: b};
-	});
-var elm$core$Basics$cos = _Basics_cos;
-var elm$core$Basics$sin = _Basics_sin;
-var timjs$elm_collage$Collage$Core$apply = function (_n0) {
-	var shift = _n0.shift;
-	var scale = _n0.scale;
-	var rotation = _n0.rotation;
-	var rotated = function (_n5) {
-		var x = _n5.a;
-		var y = _n5.b;
-		var s = elm$core$Basics$sin(rotation);
-		var c = elm$core$Basics$cos(rotation);
-		return _Utils_Tuple2((c * x) - (s * y), (s * x) + (c * y));
-	};
-	var _n1 = scale;
-	var sx = _n1.a;
-	var sy = _n1.b;
-	var scaled = function (_n4) {
-		var x = _n4.a;
-		var y = _n4.b;
-		return _Utils_Tuple2(sx * x, sy * y);
-	};
-	var _n2 = shift;
-	var dx = _n2.a;
-	var dy = _n2.b;
-	var shifted = function (_n3) {
-		var x = _n3.a;
-		var y = _n3.b;
-		return _Utils_Tuple2(x + dx, y + dy);
-	};
-	return A2(
-		elm$core$Basics$composeL,
-		A2(elm$core$Basics$composeL, shifted, scaled),
-		rotated);
-};
-var timjs$elm_collage$Collage$Layout$handlePoints = function (thickness) {
-	var thicken = function (_n0) {
-		var x = _n0.a;
-		var y = _n0.b;
-		var t = thickness / 2;
-		return _Utils_Tuple2(
-			(x < 0) ? (x - t) : (x + t),
-			(y < 0) ? (y - t) : (y + t));
-	};
-	return elm$core$List$map(thicken);
-};
-var timjs$elm_collage$Collage$Layout$handleBox = F2(
-	function (thickness, _n0) {
-		var w = _n0.a;
-		var h = _n0.b;
-		var y = h / 2;
-		var x = w / 2;
-		return A2(
-			timjs$elm_collage$Collage$Layout$handlePoints,
-			thickness,
-			_List_fromArray(
-				[
-					_Utils_Tuple2(-x, -y),
-					_Utils_Tuple2(x, -y),
-					_Utils_Tuple2(x, y),
-					_Utils_Tuple2(-x, y)
-				]));
-	});
-var timjs$elm_collage$Collage$Layout$unpack = function (_n0) {
-	var toTop = _n0.toTop;
-	var toBottom = _n0.toBottom;
-	var toRight = _n0.toRight;
-	var toLeft = _n0.toLeft;
-	return _List_fromArray(
-		[
-			_Utils_Tuple2(-toLeft, -toBottom),
-			_Utils_Tuple2(toRight, -toBottom),
-			_Utils_Tuple2(toRight, toTop),
-			_Utils_Tuple2(-toLeft, toTop)
-		]);
-};
-var timjs$elm_collage$Collage$Layout$distances = function (col) {
-	var points = timjs$elm_collage$Collage$Layout$handleBasic(col.basic);
-	var _n8 = elm$core$List$unzip(
-		A2(
-			elm$core$List$map,
-			timjs$elm_collage$Collage$Core$apply(col),
-			points));
-	var xs = _n8.a;
-	var ys = _n8.b;
-	return {
-		toBottom: -A2(
-			elm$core$Maybe$withDefault,
-			0,
-			elm$core$List$minimum(ys)),
-		toLeft: -A2(
-			elm$core$Maybe$withDefault,
-			0,
-			elm$core$List$minimum(xs)),
-		toRight: A2(
-			elm$core$Maybe$withDefault,
-			0,
-			elm$core$List$maximum(xs)),
-		toTop: A2(
-			elm$core$Maybe$withDefault,
-			0,
-			elm$core$List$maximum(ys))
-	};
-};
-var timjs$elm_collage$Collage$Layout$handleBasic = function (basic) {
-	handleBasic:
-	while (true) {
-		switch (basic.$) {
-			case 'Shape':
-				switch (basic.b.$) {
-					case 'Circle':
-						var _n1 = basic.a;
-						var thickness = _n1.b.thickness;
-						var r = basic.b.a;
-						var d = 2 * r;
-						return A2(
-							timjs$elm_collage$Collage$Layout$handleBox,
-							thickness,
-							_Utils_Tuple2(d, d));
-					case 'Ellipse':
-						var _n2 = basic.a;
-						var thickness = _n2.b.thickness;
-						var _n3 = basic.b;
-						var rx = _n3.a;
-						var ry = _n3.b;
-						return A2(
-							timjs$elm_collage$Collage$Layout$handleBox,
-							thickness,
-							_Utils_Tuple2(2 * rx, 2 * ry));
-					case 'Rectangle':
-						var _n4 = basic.a;
-						var thickness = _n4.b.thickness;
-						var _n5 = basic.b;
-						var w = _n5.a;
-						var h = _n5.b;
-						return A2(
-							timjs$elm_collage$Collage$Layout$handleBox,
-							thickness,
-							_Utils_Tuple2(w, h));
-					case 'Polygon':
-						var _n6 = basic.a;
-						var thickness = _n6.b.thickness;
-						var ps = basic.b.a;
-						return A2(timjs$elm_collage$Collage$Layout$handlePoints, thickness, ps);
-					default:
-						var _n7 = basic.a;
-						var line = _n7.b;
-						var path = basic.b.a;
-						var $temp$basic = A2(timjs$elm_collage$Collage$Core$Path, line, path);
-						basic = $temp$basic;
-						continue handleBasic;
-				}
-			case 'Path':
-				var thickness = basic.a.thickness;
-				var cap = basic.a.cap;
-				var ps = basic.b.a;
-				return A2(
-					timjs$elm_collage$Collage$Layout$handlePoints,
-					_Utils_eq(cap, timjs$elm_collage$Collage$Flat) ? 0 : thickness,
-					ps);
-			case 'Text':
-				var dims = basic.a;
-				return A2(timjs$elm_collage$Collage$Layout$handleBox, 0, dims);
-			case 'Image':
-				var dims = basic.a;
-				return A2(timjs$elm_collage$Collage$Layout$handleBox, 0, dims);
-			case 'Html':
-				var dims = basic.a;
-				return A2(timjs$elm_collage$Collage$Layout$handleBox, 0, dims);
-			case 'Group':
-				var cols = basic.a;
-				return A2(
-					timjs$elm_collage$Collage$Layout$handlePoints,
-					0,
-					elm$core$List$concat(
-						A2(
-							elm$core$List$map,
-							A2(elm$core$Basics$composeR, timjs$elm_collage$Collage$Layout$distances, timjs$elm_collage$Collage$Layout$unpack),
-							cols)));
-			default:
-				var back = basic.b;
-				return A2(
-					timjs$elm_collage$Collage$Layout$handlePoints,
-					0,
-					timjs$elm_collage$Collage$Layout$unpack(
-						timjs$elm_collage$Collage$Layout$distances(back)));
-		}
-	}
-};
-var timjs$elm_collage$Collage$Layout$envelope = F2(
-	function (dir, col) {
-		var _n0 = timjs$elm_collage$Collage$Layout$distances(col);
-		var toTop = _n0.toTop;
-		var toBottom = _n0.toBottom;
-		var toLeft = _n0.toLeft;
-		var toRight = _n0.toRight;
-		switch (dir.$) {
-			case 'Up':
-				return toTop;
-			case 'Down':
-				return toBottom;
-			case 'Right':
-				return toRight;
-			default:
-				return toLeft;
-		}
-	});
-var timjs$elm_collage$Collage$Layout$Down = {$: 'Down'};
-var timjs$elm_collage$Collage$Layout$Left = {$: 'Left'};
-var timjs$elm_collage$Collage$Layout$Up = {$: 'Up'};
-var timjs$elm_collage$Collage$Layout$facing = function (dir) {
-	switch (dir.$) {
-		case 'Up':
-			return timjs$elm_collage$Collage$Layout$Down;
-		case 'Down':
-			return timjs$elm_collage$Collage$Layout$Up;
-		case 'Right':
-			return timjs$elm_collage$Collage$Layout$Left;
-		default:
-			return timjs$elm_collage$Collage$Layout$Right;
-	}
-};
-var timjs$elm_collage$Collage$Layout$place = F3(
-	function (dir, a, b) {
-		var len = A2(timjs$elm_collage$Collage$Layout$envelope, dir, a) + A2(
-			timjs$elm_collage$Collage$Layout$envelope,
-			timjs$elm_collage$Collage$Layout$facing(dir),
-			b);
-		var move = function () {
-			switch (dir.$) {
-				case 'Up':
-					return _Utils_Tuple2(0, len);
-				case 'Down':
-					return _Utils_Tuple2(0, -len);
-				case 'Right':
-					return _Utils_Tuple2(len, 0);
-				default:
-					return _Utils_Tuple2(-len, 0);
-			}
-		}();
-		return A2(timjs$elm_collage$Collage$shift, move, b);
-	});
-var timjs$elm_collage$Collage$Core$Group = function (a) {
-	return {$: 'Group', a: a};
-};
-var timjs$elm_collage$Collage$group = A2(elm$core$Basics$composeL, timjs$elm_collage$Collage$Core$collage, timjs$elm_collage$Collage$Core$Group);
-var timjs$elm_collage$Collage$Layout$stack = timjs$elm_collage$Collage$group;
-var timjs$elm_collage$Collage$Layout$beside = F3(
-	function (dir, a, b) {
-		return timjs$elm_collage$Collage$Layout$stack(
-			_List_fromArray(
-				[
-					a,
-					A3(timjs$elm_collage$Collage$Layout$place, dir, a, b)
-				]));
-	});
-var timjs$elm_collage$Collage$Core$Transparent = {$: 'Transparent'};
-var timjs$elm_collage$Collage$transparent = timjs$elm_collage$Collage$Core$Transparent;
-var timjs$elm_collage$Collage$invisible = A2(timjs$elm_collage$Collage$solid, 0, timjs$elm_collage$Collage$transparent);
-var timjs$elm_collage$Collage$Layout$spacer = F2(
-	function (w, h) {
-		return A2(
-			timjs$elm_collage$Collage$styled,
-			_Utils_Tuple2(timjs$elm_collage$Collage$transparent, timjs$elm_collage$Collage$invisible),
-			A2(timjs$elm_collage$Collage$rectangle, w, h));
-	});
-var timjs$elm_collage$Collage$Layout$empty = A2(timjs$elm_collage$Collage$Layout$spacer, 0, 0);
-var timjs$elm_collage$Collage$Layout$horizontal = A2(
-	elm$core$List$foldr,
-	timjs$elm_collage$Collage$Layout$beside(timjs$elm_collage$Collage$Layout$Right),
-	timjs$elm_collage$Collage$Layout$empty);
-var author$project$GridEditor$rowView = F2(
-	function (gradient, cells) {
-		return timjs$elm_collage$Collage$Layout$horizontal(
+var author$project$Grid$toListWithCoordinates = function (grid) {
+	return elm$core$List$concat(
+		elm$core$Array$toList(
 			A2(
-				elm$core$List$map,
-				author$project$GridEditor$cellView(gradient),
-				elm$core$Array$toList(cells)));
+				elm$core$Array$map,
+				elm$core$Array$toList,
+				A2(
+					author$project$Grid$mapWithCoordinate,
+					F2(
+						function (coord, cell) {
+							return _Utils_Tuple2(coord, cell);
+						}),
+					grid))));
+};
+var author$project$GridEditor$cellWidth = 0.1;
+var author$project$GridEditor$Vertex = F2(
+	function (position, color) {
+		return {color: color, position: position};
 	});
-var timjs$elm_collage$Collage$Layout$vertical = A2(
-	elm$core$List$foldr,
-	timjs$elm_collage$Collage$Layout$beside(timjs$elm_collage$Collage$Layout$Down),
-	timjs$elm_collage$Collage$Layout$empty);
-var author$project$GridEditor$gridView = F2(
-	function (gradient, rows) {
-		return timjs$elm_collage$Collage$Layout$vertical(
-			A2(
-				elm$core$List$map,
-				author$project$GridEditor$rowView(gradient),
-				elm$core$Array$toList(rows)));
-	});
-var timjs$elm_collage$Collage$opposite = function (_n0) {
-	var x = _n0.a;
-	var y = _n0.b;
-	return _Utils_Tuple2(-x, -y);
+var elm_explorations$linear_algebra$Math$Vector3$vec3 = _MJS_v3;
+var author$project$GridEditor$vec3FromColor = function (color) {
+	var rbga = avh4$elm_color$Color$toRgba(color);
+	return A3(elm_explorations$linear_algebra$Math$Vector3$vec3, rbga.red, rbga.green, rbga.blue);
 };
-var timjs$elm_collage$Collage$Layout$align = F2(
-	function (anchor, col) {
-		return A2(
-			timjs$elm_collage$Collage$shift,
-			timjs$elm_collage$Collage$opposite(
-				anchor(col)),
-			col);
-	});
-var timjs$elm_collage$Collage$Layout$height = function (col) {
-	var _n0 = timjs$elm_collage$Collage$Layout$distances(col);
-	var toTop = _n0.toTop;
-	var toBottom = _n0.toBottom;
-	return toTop + toBottom;
-};
-var timjs$elm_collage$Collage$Layout$topLeft = function (col) {
-	var _n0 = timjs$elm_collage$Collage$Layout$distances(col);
-	var toLeft = _n0.toLeft;
-	var toTop = _n0.toTop;
-	return _Utils_Tuple2(-toLeft, toTop);
-};
-var timjs$elm_collage$Collage$Layout$width = function (col) {
-	var _n0 = timjs$elm_collage$Collage$Layout$distances(col);
-	var toLeft = _n0.toLeft;
-	var toRight = _n0.toRight;
-	return toLeft + toRight;
-};
-var elm$svg$Svg$Attributes$version = _VirtualDom_attribute('version');
-var elm$svg$Svg$circle = elm$svg$Svg$trustedNode('circle');
-var elm$svg$Svg$ellipse = elm$svg$Svg$trustedNode('ellipse');
-var elm$svg$Svg$foreignObject = elm$svg$Svg$trustedNode('foreignObject');
-var elm$svg$Svg$g = elm$svg$Svg$trustedNode('g');
-var elm$svg$Svg$image = elm$svg$Svg$trustedNode('image');
-var elm$svg$Svg$polygon = elm$svg$Svg$trustedNode('polygon');
-var elm$svg$Svg$polyline = elm$svg$Svg$trustedNode('polyline');
-var elm$svg$Svg$text = elm$virtual_dom$VirtualDom$text;
-var elm$svg$Svg$text_ = elm$svg$Svg$trustedNode('text');
-var elm$svg$Svg$Attributes$points = _VirtualDom_attribute('points');
-var elm$svg$Svg$Attributes$r = _VirtualDom_attribute('r');
-var elm$svg$Svg$Attributes$rx = _VirtualDom_attribute('rx');
-var elm$svg$Svg$Attributes$ry = _VirtualDom_attribute('ry');
-var elm$svg$Svg$Attributes$xlinkHref = function (value) {
-	return A3(
-		_VirtualDom_attributeNS,
-		'http://www.w3.org/1999/xlink',
-		'xlink:href',
-		_VirtualDom_noJavaScriptUri(value));
-};
-var elm$svg$Svg$Attributes$dominantBaseline = _VirtualDom_attribute('dominant-baseline');
-var elm$svg$Svg$Attributes$fillOpacity = _VirtualDom_attribute('fill-opacity');
-var elm$svg$Svg$Attributes$fontFamily = _VirtualDom_attribute('font-family');
-var elm$svg$Svg$Attributes$fontSize = _VirtualDom_attribute('font-size');
-var elm$svg$Svg$Attributes$fontStyle = _VirtualDom_attribute('font-style');
-var elm$svg$Svg$Attributes$fontVariant = _VirtualDom_attribute('font-variant');
-var elm$svg$Svg$Attributes$fontWeight = _VirtualDom_attribute('font-weight');
-var elm$svg$Svg$Attributes$opacity = _VirtualDom_attribute('opacity');
-var elm$svg$Svg$Attributes$stroke = _VirtualDom_attribute('stroke');
-var elm$svg$Svg$Attributes$strokeDasharray = _VirtualDom_attribute('stroke-dasharray');
-var elm$svg$Svg$Attributes$strokeDashoffset = _VirtualDom_attribute('stroke-dashoffset');
-var elm$svg$Svg$Attributes$strokeLinecap = _VirtualDom_attribute('stroke-linecap');
-var elm$svg$Svg$Attributes$strokeLinejoin = _VirtualDom_attribute('stroke-linejoin');
-var elm$svg$Svg$Attributes$strokeOpacity = _VirtualDom_attribute('stroke-opacity');
-var elm$svg$Svg$Attributes$strokeWidth = _VirtualDom_attribute('stroke-width');
-var elm$svg$Svg$Attributes$textAnchor = _VirtualDom_attribute('text-anchor');
-var elm$svg$Svg$Attributes$textDecoration = _VirtualDom_attribute('text-decoration');
-var elm$svg$Svg$Attributes$transform = _VirtualDom_attribute('transform');
-var timjs$elm_collage$Collage$Render$decodeCap = function (cap) {
-	switch (cap.$) {
-		case 'Round':
-			return 'round';
-		case 'Padded':
-			return 'square';
-		default:
-			return 'butt';
-	}
-};
-var timjs$elm_collage$Collage$Render$decodeDashing = function (ds) {
-	var decodeOnOff = function (_n0) {
-		var x = _n0.a;
-		var y = _n0.b;
-		return A2(
-			elm$core$String$join,
-			',',
-			_List_fromArray(
-				[
-					elm$core$String$fromInt(x),
-					elm$core$String$fromInt(y)
-				]));
-	};
-	return A2(
-		elm$core$String$join,
-		' ',
-		A2(elm$core$List$map, decodeOnOff, ds));
-};
-var avh4$elm_color$Color$rgb = F3(
-	function (r, g, b) {
-		return A4(avh4$elm_color$Color$RgbaSpace, r, g, b, 1.0);
-	});
-var timjs$elm_collage$Collage$Render$decodeColor = function (c) {
-	var _n0 = avh4$elm_color$Color$toRgba(c);
-	var red = _n0.red;
-	var green = _n0.green;
-	var blue = _n0.blue;
-	return avh4$elm_color$Color$toCssString(
-		A3(avh4$elm_color$Color$rgb, red, green, blue));
-};
-var timjs$elm_collage$Collage$Render$decodeFill = function (fs) {
-	if (fs.$ === 'Uniform') {
-		var c = fs.a;
-		return timjs$elm_collage$Collage$Render$decodeColor(c);
-	} else {
-		return 'none';
-	}
-};
-var timjs$elm_collage$Collage$Render$decodeOpacity = function (c) {
-	var _n0 = avh4$elm_color$Color$toRgba(c);
-	var alpha = _n0.alpha;
-	return elm$core$String$fromFloat(alpha);
-};
-var timjs$elm_collage$Collage$Render$decodeFillOpacity = function (fs) {
-	if (fs.$ === 'Uniform') {
-		var c = fs.a;
-		return timjs$elm_collage$Collage$Render$decodeOpacity(c);
-	} else {
-		return '0';
-	}
-};
-var timjs$elm_collage$Collage$Render$decodeJoin = function (join) {
-	switch (join.$) {
-		case 'Smooth':
-			return 'round';
-		case 'Sharp':
-			return 'miter';
-		default:
-			return 'bevel';
-	}
-};
-var elm$core$Basics$pi = _Basics_pi;
-var timjs$elm_collage$Collage$Render$decodeTransform = function (collage) {
-	var sy = elm$core$String$fromFloat(collage.scale.b);
-	var sx = elm$core$String$fromFloat(collage.scale.a);
-	var r = elm$core$String$fromFloat((((-collage.rotation) / 2) / elm$core$Basics$pi) * 360);
-	var dy = elm$core$String$fromFloat(-collage.shift.b);
-	var dx = elm$core$String$fromFloat(collage.shift.a);
-	return elm$core$String$concat(
-		_List_fromArray(
-			['translate(', dx, ',', dy, ') scale(', sx, ',', sy, ') rotate(', r, ')']));
-};
-var timjs$elm_collage$Collage$Render$attrs = function (collage) {
-	var _n0 = collage.basic;
-	switch (_n0.$) {
-		case 'Path':
-			var line = _n0.a;
-			return _List_fromArray(
-				[
-					elm$svg$Svg$Attributes$stroke(
-					timjs$elm_collage$Collage$Render$decodeFill(line.fill)),
-					elm$svg$Svg$Attributes$strokeOpacity(
-					timjs$elm_collage$Collage$Render$decodeFillOpacity(line.fill)),
-					elm$svg$Svg$Attributes$strokeWidth(
-					elm$core$String$fromFloat(line.thickness)),
-					elm$svg$Svg$Attributes$strokeLinecap(
-					timjs$elm_collage$Collage$Render$decodeCap(line.cap)),
-					elm$svg$Svg$Attributes$strokeLinejoin(
-					timjs$elm_collage$Collage$Render$decodeJoin(line.join)),
-					elm$svg$Svg$Attributes$fill('none'),
-					elm$svg$Svg$Attributes$opacity(
-					elm$core$String$fromFloat(collage.opacity)),
-					elm$svg$Svg$Attributes$transform(
-					timjs$elm_collage$Collage$Render$decodeTransform(collage)),
-					elm$svg$Svg$Attributes$strokeDashoffset(
-					elm$core$String$fromInt(line.dashPhase)),
-					elm$svg$Svg$Attributes$strokeDasharray(
-					timjs$elm_collage$Collage$Render$decodeDashing(line.dashPattern))
-				]);
-		case 'Shape':
-			var _n1 = _n0.a;
-			var fill = _n1.a;
-			var line = _n1.b;
-			return _List_fromArray(
-				[
-					elm$svg$Svg$Attributes$fill(
-					timjs$elm_collage$Collage$Render$decodeFill(fill)),
-					elm$svg$Svg$Attributes$fillOpacity(
-					timjs$elm_collage$Collage$Render$decodeFillOpacity(fill)),
-					elm$svg$Svg$Attributes$stroke(
-					timjs$elm_collage$Collage$Render$decodeFill(line.fill)),
-					elm$svg$Svg$Attributes$strokeOpacity(
-					timjs$elm_collage$Collage$Render$decodeFillOpacity(line.fill)),
-					elm$svg$Svg$Attributes$strokeWidth(
-					elm$core$String$fromFloat(line.thickness)),
-					elm$svg$Svg$Attributes$strokeLinecap(
-					timjs$elm_collage$Collage$Render$decodeCap(line.cap)),
-					elm$svg$Svg$Attributes$strokeLinejoin(
-					timjs$elm_collage$Collage$Render$decodeJoin(line.join)),
-					elm$svg$Svg$Attributes$opacity(
-					elm$core$String$fromFloat(collage.opacity)),
-					elm$svg$Svg$Attributes$transform(
-					timjs$elm_collage$Collage$Render$decodeTransform(collage)),
-					elm$svg$Svg$Attributes$strokeDashoffset(
-					elm$core$String$fromInt(line.dashPhase)),
-					elm$svg$Svg$Attributes$strokeDasharray(
-					timjs$elm_collage$Collage$Render$decodeDashing(line.dashPattern))
-				]);
-		case 'Text':
-			var _n2 = _n0.b;
-			var style = _n2.a;
-			var str = _n2.b;
-			return _List_fromArray(
-				[
-					elm$svg$Svg$Attributes$fill(
-					timjs$elm_collage$Collage$Render$decodeFill(
-						timjs$elm_collage$Collage$Core$Uniform(style.color))),
-					elm$svg$Svg$Attributes$fontFamily(
-					function () {
-						var _n3 = style.typeface;
-						switch (_n3.$) {
-							case 'Serif':
-								return 'serif';
-							case 'Sansserif':
-								return 'sans-serif';
-							case 'Monospace':
-								return 'monospace';
-							default:
-								var name = _n3.a;
-								return name;
-						}
-					}()),
-					elm$svg$Svg$Attributes$fontSize(
-					elm$core$String$fromInt(style.size)),
-					elm$svg$Svg$Attributes$fontWeight(
-					function () {
-						var _n4 = style.weight;
-						switch (_n4.$) {
-							case 'Thin':
-								return '200';
-							case 'Light':
-								return '300';
-							case 'Regular':
-								return 'normal';
-							case 'Medium':
-								return '500';
-							case 'SemiBold':
-								return '600';
-							case 'Bold':
-								return 'bold';
-							default:
-								return '800';
-						}
-					}()),
-					elm$svg$Svg$Attributes$fontStyle(
-					function () {
-						var _n5 = style.shape;
-						switch (_n5.$) {
-							case 'Upright':
-								return 'normal';
-							case 'SmallCaps':
-								return 'normal';
-							case 'Slanted':
-								return 'oblique';
-							default:
-								return 'italic';
-						}
-					}()),
-					elm$svg$Svg$Attributes$fontVariant(
-					function () {
-						var _n6 = style.shape;
-						if (_n6.$ === 'SmallCaps') {
-							return 'small-caps';
-						} else {
-							return 'normal';
-						}
-					}()),
-					elm$svg$Svg$Attributes$textDecoration(
-					function () {
-						var _n7 = style.line;
-						switch (_n7.$) {
-							case 'None':
-								return 'none';
-							case 'Under':
-								return 'underline';
-							case 'Over':
-								return 'overline';
-							default:
-								return 'line-through';
-						}
-					}()),
-					elm$svg$Svg$Attributes$textAnchor('middle'),
-					elm$svg$Svg$Attributes$dominantBaseline('middle'),
-					elm$svg$Svg$Attributes$opacity(
-					elm$core$String$fromFloat(collage.opacity)),
-					elm$svg$Svg$Attributes$transform(
-					timjs$elm_collage$Collage$Render$decodeTransform(collage))
-				]);
-		default:
-			return _List_fromArray(
-				[
-					elm$svg$Svg$Attributes$opacity(
-					elm$core$String$fromFloat(collage.opacity)),
-					elm$svg$Svg$Attributes$transform(
-					timjs$elm_collage$Collage$Render$decodeTransform(collage))
-				]);
-	}
-};
-var timjs$elm_collage$Collage$Render$box = F2(
-	function (w, h) {
+var author$project$GridEditor$trianglesFromCell = F6(
+	function (gradient, gridOriginX, gridOriginY, cellIndexI, cellIndexJ, cellValue) {
+		var color = author$project$GridEditor$vec3FromColor(
+			A2(author$project$DiscreteGradient$getColorAt, cellValue, gradient));
+		var cellOriginY = gridOriginY + (cellIndexJ * author$project$GridEditor$cellWidth);
+		var cellOriginX = gridOriginX + (cellIndexI * author$project$GridEditor$cellWidth);
 		return _List_fromArray(
 			[
-				elm$svg$Svg$Attributes$width(
-				elm$core$String$fromFloat(w)),
-				elm$svg$Svg$Attributes$height(
-				elm$core$String$fromFloat(h)),
-				elm$svg$Svg$Attributes$x(
-				elm$core$String$fromFloat((-w) / 2)),
-				elm$svg$Svg$Attributes$y(
-				elm$core$String$fromFloat((-h) / 2))
+				_Utils_Tuple3(
+				A2(
+					author$project$GridEditor$Vertex,
+					A3(elm_explorations$linear_algebra$Math$Vector3$vec3, cellOriginX, cellOriginY, 0),
+					color),
+				A2(
+					author$project$GridEditor$Vertex,
+					A3(elm_explorations$linear_algebra$Math$Vector3$vec3, cellOriginX, cellOriginY + author$project$GridEditor$cellWidth, 0),
+					color),
+				A2(
+					author$project$GridEditor$Vertex,
+					A3(elm_explorations$linear_algebra$Math$Vector3$vec3, cellOriginX + author$project$GridEditor$cellWidth, cellOriginY + author$project$GridEditor$cellWidth, 0),
+					color)),
+				_Utils_Tuple3(
+				A2(
+					author$project$GridEditor$Vertex,
+					A3(elm_explorations$linear_algebra$Math$Vector3$vec3, cellOriginX, cellOriginY, 0),
+					color),
+				A2(
+					author$project$GridEditor$Vertex,
+					A3(elm_explorations$linear_algebra$Math$Vector3$vec3, cellOriginX + author$project$GridEditor$cellWidth, cellOriginY + author$project$GridEditor$cellWidth, 0),
+					color),
+				A2(
+					author$project$GridEditor$Vertex,
+					A3(elm_explorations$linear_algebra$Math$Vector3$vec3, cellOriginX + author$project$GridEditor$cellWidth, cellOriginY, 0),
+					color))
 			]);
 	});
-var timjs$elm_collage$Collage$Render$decodePoints = function (ps) {
-	return A2(
-		elm$core$String$join,
-		' ',
-		A2(
-			elm$core$List$map,
-			function (_n0) {
-				var x = _n0.a;
-				var y = _n0.b;
-				return A2(
-					elm$core$String$join,
-					',',
-					_List_fromArray(
-						[
-							elm$core$String$fromFloat(x),
-							elm$core$String$fromFloat(-y)
-						]));
-			},
-			ps));
-};
-var elm_community$basics_extra$Basics$Extra$uncurry = F2(
-	function (f, _n0) {
-		var a = _n0.a;
-		var b = _n0.b;
-		return A2(f, a, b);
+var author$project$GridEditor$trianglesFromGrid = F2(
+	function (gradient, grid) {
+		var gridOriginY = (((-1) * author$project$GridEditor$cellWidth) * author$project$Grid$height(grid)) * 0.5;
+		var gridOriginX = (((-1) * author$project$GridEditor$cellWidth) * author$project$Grid$width(grid)) * 0.5;
+		return elm$core$List$concat(
+			A2(
+				elm$core$List$map,
+				function (_n0) {
+					var _n1 = _n0.a;
+					var i = _n1.a;
+					var j = _n1.b;
+					var cellValue = _n0.b;
+					return A6(author$project$GridEditor$trianglesFromCell, gradient, gridOriginX, gridOriginY, i, j, cellValue);
+				},
+				author$project$Grid$toListWithCoordinates(grid)));
 	});
-var timjs$elm_collage$Collage$Render$events = function (handlers) {
-	return A2(
-		elm$core$List$map,
-		elm_community$basics_extra$Basics$Extra$uncurry(elm$svg$Svg$Events$on),
-		handlers);
+var elm_explorations$webgl$WebGL$Mesh3 = F2(
+	function (a, b) {
+		return {$: 'Mesh3', a: a, b: b};
+	});
+var elm_explorations$webgl$WebGL$triangles = elm_explorations$webgl$WebGL$Mesh3(
+	{elemSize: 3, indexSize: 0, mode: 4});
+var author$project$GridEditor$mesh = F2(
+	function (gradient, grid) {
+		return elm_explorations$webgl$WebGL$triangles(
+			A2(author$project$GridEditor$trianglesFromGrid, gradient, grid));
+	});
+var author$project$GridEditor$Scroll = function (a) {
+	return {$: 'Scroll', a: a};
 };
-var timjs$elm_collage$Collage$Render$render = function (collage) {
-	render:
-	while (true) {
-		var name = A2(elm$core$Maybe$withDefault, '_unnamed_', collage.name);
-		var _n0 = collage.basic;
-		switch (_n0.$) {
-			case 'Path':
-				var style = _n0.a;
-				var path = _n0.b;
-				var ps = path.a;
-				return A2(
-					elm$svg$Svg$polyline,
-					_Utils_ap(
-						_List_fromArray(
-							[
-								elm$svg$Svg$Attributes$id(name),
-								elm$svg$Svg$Attributes$points(
-								timjs$elm_collage$Collage$Render$decodePoints(ps))
-							]),
-						_Utils_ap(
-							timjs$elm_collage$Collage$Render$attrs(collage),
-							timjs$elm_collage$Collage$Render$events(collage.handlers))),
-					_List_Nil);
-			case 'Shape':
-				var _n2 = _n0.a;
-				var fill = _n2.a;
-				var line = _n2.b;
-				var shape = _n0.b;
-				switch (shape.$) {
-					case 'Polygon':
-						var ps = shape.a;
-						return A2(
-							elm$svg$Svg$polygon,
-							_Utils_ap(
-								_List_fromArray(
-									[
-										elm$svg$Svg$Attributes$id(name),
-										elm$svg$Svg$Attributes$points(
-										timjs$elm_collage$Collage$Render$decodePoints(ps))
-									]),
-								_Utils_ap(
-									timjs$elm_collage$Collage$Render$attrs(collage),
-									timjs$elm_collage$Collage$Render$events(collage.handlers))),
-							_List_Nil);
-					case 'Circle':
-						var r = shape.a;
-						return A2(
-							elm$svg$Svg$circle,
-							_Utils_ap(
-								_List_fromArray(
-									[
-										elm$svg$Svg$Attributes$id(name),
-										elm$svg$Svg$Attributes$r(
-										elm$core$String$fromFloat(r))
-									]),
-								_Utils_ap(
-									timjs$elm_collage$Collage$Render$attrs(collage),
-									timjs$elm_collage$Collage$Render$events(collage.handlers))),
-							_List_Nil);
-					case 'Ellipse':
-						var rx = shape.a;
-						var ry = shape.b;
-						return A2(
-							elm$svg$Svg$ellipse,
-							_Utils_ap(
-								_List_fromArray(
-									[
-										elm$svg$Svg$Attributes$id(name),
-										elm$svg$Svg$Attributes$rx(
-										elm$core$String$fromFloat(rx)),
-										elm$svg$Svg$Attributes$ry(
-										elm$core$String$fromFloat(ry))
-									]),
-								_Utils_ap(
-									timjs$elm_collage$Collage$Render$attrs(collage),
-									timjs$elm_collage$Collage$Render$events(collage.handlers))),
-							_List_Nil);
-					case 'Rectangle':
-						var w = shape.a;
-						var h = shape.b;
-						var r = shape.c;
-						return A2(
-							elm$svg$Svg$rect,
-							_Utils_ap(
-								_List_fromArray(
-									[
-										elm$svg$Svg$Attributes$id(name),
-										elm$svg$Svg$Attributes$rx(
-										elm$core$String$fromFloat(r)),
-										elm$svg$Svg$Attributes$ry(
-										elm$core$String$fromFloat(r))
-									]),
-								_Utils_ap(
-									A2(timjs$elm_collage$Collage$Render$box, w, h),
-									_Utils_ap(
-										timjs$elm_collage$Collage$Render$attrs(collage),
-										timjs$elm_collage$Collage$Render$events(collage.handlers)))),
-							_List_Nil);
-					default:
-						var path = shape.a;
-						var $temp$collage = _Utils_update(
-							collage,
-							{
-								basic: A2(timjs$elm_collage$Collage$Core$Path, line, path)
-							});
-						collage = $temp$collage;
-						continue render;
-				}
-			case 'Text':
-				var _n4 = _n0.b;
-				var style = _n4.a;
-				var str = _n4.b;
-				return A2(
-					elm$svg$Svg$text_,
-					_Utils_ap(
-						_List_fromArray(
-							[
-								elm$svg$Svg$Attributes$id(name)
-							]),
-						_Utils_ap(
-							timjs$elm_collage$Collage$Render$attrs(collage),
-							timjs$elm_collage$Collage$Render$events(collage.handlers))),
-					_List_fromArray(
-						[
-							elm$svg$Svg$text(str)
-						]));
-			case 'Image':
-				var _n5 = _n0.a;
-				var w = _n5.a;
-				var h = _n5.b;
-				var url = _n0.b;
-				return A2(
-					elm$svg$Svg$image,
-					_Utils_ap(
-						_List_fromArray(
-							[
-								elm$svg$Svg$Attributes$id(name),
-								elm$svg$Svg$Attributes$xlinkHref(url)
-							]),
-						_Utils_ap(
-							A2(timjs$elm_collage$Collage$Render$box, w, h),
-							_Utils_ap(
-								timjs$elm_collage$Collage$Render$attrs(collage),
-								timjs$elm_collage$Collage$Render$events(collage.handlers)))),
-					_List_Nil);
-			case 'Html':
-				var _n6 = _n0.a;
-				var w = _n6.a;
-				var h = _n6.b;
-				var html = _n0.b;
-				return A2(
-					elm$svg$Svg$foreignObject,
-					_Utils_ap(
-						_List_fromArray(
-							[
-								elm$svg$Svg$Attributes$id(name)
-							]),
-						_Utils_ap(
-							A2(timjs$elm_collage$Collage$Render$box, w, h),
-							_Utils_ap(
-								timjs$elm_collage$Collage$Render$attrs(collage),
-								timjs$elm_collage$Collage$Render$events(collage.handlers)))),
-					_List_fromArray(
-						[html]));
-			case 'Group':
-				var collages = _n0.a;
-				return A2(
-					elm$svg$Svg$g,
-					A2(
-						elm$core$List$cons,
-						elm$svg$Svg$Attributes$id(name),
-						_Utils_ap(
-							timjs$elm_collage$Collage$Render$attrs(collage),
-							timjs$elm_collage$Collage$Render$events(collage.handlers))),
-					A3(
-						elm$core$List$foldl,
-						F2(
-							function (col, res) {
-								return A2(
-									elm$core$List$cons,
-									timjs$elm_collage$Collage$Render$render(col),
-									res);
-							}),
-						_List_Nil,
-						collages));
+var author$project$GridEditor$scroll = function (wheelEvent) {
+	return author$project$GridEditor$Scroll(wheelEvent.deltaY);
+};
+var author$project$GridEditor$vertexShader = {
+	src: '\n        attribute vec3 position;\n        attribute vec3 color;\n        uniform mat4 camera;\n        varying vec3 vcolor;\n\n        void main () {\n            gl_Position = camera * vec4(position, 1.0);\n            vcolor = color;\n        }\n    ',
+	attributes: {color: 'color', position: 'position'},
+	uniforms: {camera: 'camera'}
+};
+var elm$html$Html$Attributes$height = function (n) {
+	return A2(
+		_VirtualDom_attribute,
+		'height',
+		elm$core$String$fromInt(n));
+};
+var elm$html$Html$Attributes$width = function (n) {
+	return A2(
+		_VirtualDom_attribute,
+		'width',
+		elm$core$String$fromInt(n));
+};
+var elm_explorations$webgl$WebGL$Internal$disableSetting = F2(
+	function (cache, setting) {
+		switch (setting.$) {
+			case 'Blend':
+				return _WebGL_disableBlend(cache);
+			case 'DepthTest':
+				return _WebGL_disableDepthTest(cache);
+			case 'StencilTest':
+				return _WebGL_disableStencilTest(cache);
+			case 'Scissor':
+				return _WebGL_disableScissor(cache);
+			case 'ColorMask':
+				return _WebGL_disableColorMask(cache);
+			case 'CullFace':
+				return _WebGL_disableCullFace(cache);
+			case 'PolygonOffset':
+				return _WebGL_disablePolygonOffset(cache);
+			case 'SampleCoverage':
+				return _WebGL_disableSampleCoverage(cache);
 			default:
-				var fore = _n0.a;
-				var back = _n0.b;
-				var $temp$collage = _Utils_update(
-					collage,
-					{
-						basic: timjs$elm_collage$Collage$Core$Group(
-							_List_fromArray(
-								[fore, back]))
-					});
-				collage = $temp$collage;
-				continue render;
+				return _WebGL_disableSampleAlphaToCoverage(cache);
 		}
+	});
+var elm_explorations$webgl$WebGL$Internal$enableOption = F2(
+	function (ctx, option) {
+		switch (option.$) {
+			case 'Alpha':
+				return A2(_WebGL_enableAlpha, ctx, option);
+			case 'Depth':
+				return A2(_WebGL_enableDepth, ctx, option);
+			case 'Stencil':
+				return A2(_WebGL_enableStencil, ctx, option);
+			case 'Antialias':
+				return A2(_WebGL_enableAntialias, ctx, option);
+			case 'ClearColor':
+				return A2(_WebGL_enableClearColor, ctx, option);
+			default:
+				return A2(_WebGL_enablePreserveDrawingBuffer, ctx, option);
+		}
+	});
+var elm_explorations$webgl$WebGL$Internal$enableSetting = F2(
+	function (gl, setting) {
+		switch (setting.$) {
+			case 'Blend':
+				return A2(_WebGL_enableBlend, gl, setting);
+			case 'DepthTest':
+				return A2(_WebGL_enableDepthTest, gl, setting);
+			case 'StencilTest':
+				return A2(_WebGL_enableStencilTest, gl, setting);
+			case 'Scissor':
+				return A2(_WebGL_enableScissor, gl, setting);
+			case 'ColorMask':
+				return A2(_WebGL_enableColorMask, gl, setting);
+			case 'CullFace':
+				return A2(_WebGL_enableCullFace, gl, setting);
+			case 'PolygonOffset':
+				return A2(_WebGL_enablePolygonOffset, gl, setting);
+			case 'SampleCoverage':
+				return A2(_WebGL_enableSampleCoverage, gl, setting);
+			default:
+				return A2(_WebGL_enableSampleAlphaToCoverage, gl, setting);
+		}
+	});
+var elm_explorations$webgl$WebGL$entityWith = _WebGL_entity;
+var elm_explorations$webgl$WebGL$Internal$DepthTest = F4(
+	function (a, b, c, d) {
+		return {$: 'DepthTest', a: a, b: b, c: c, d: d};
+	});
+var elm_explorations$webgl$WebGL$Settings$DepthTest$less = function (_n0) {
+	var write = _n0.write;
+	var near = _n0.near;
+	var far = _n0.far;
+	return A4(elm_explorations$webgl$WebGL$Internal$DepthTest, 513, write, near, far);
+};
+var elm_explorations$webgl$WebGL$Settings$DepthTest$default = elm_explorations$webgl$WebGL$Settings$DepthTest$less(
+	{far: 1, near: 0, write: true});
+var elm_explorations$webgl$WebGL$entity = elm_explorations$webgl$WebGL$entityWith(
+	_List_fromArray(
+		[elm_explorations$webgl$WebGL$Settings$DepthTest$default]));
+var elm_explorations$webgl$WebGL$Internal$Alpha = function (a) {
+	return {$: 'Alpha', a: a};
+};
+var elm_explorations$webgl$WebGL$alpha = elm_explorations$webgl$WebGL$Internal$Alpha;
+var elm_explorations$webgl$WebGL$Internal$Antialias = {$: 'Antialias'};
+var elm_explorations$webgl$WebGL$antialias = elm_explorations$webgl$WebGL$Internal$Antialias;
+var elm_explorations$webgl$WebGL$Internal$Depth = function (a) {
+	return {$: 'Depth', a: a};
+};
+var elm_explorations$webgl$WebGL$depth = elm_explorations$webgl$WebGL$Internal$Depth;
+var elm_explorations$webgl$WebGL$toHtmlWith = F3(
+	function (options, attributes, entities) {
+		return A3(_WebGL_toHtml, options, attributes, entities);
+	});
+var elm_explorations$webgl$WebGL$toHtml = elm_explorations$webgl$WebGL$toHtmlWith(
+	_List_fromArray(
+		[
+			elm_explorations$webgl$WebGL$alpha(true),
+			elm_explorations$webgl$WebGL$antialias,
+			elm_explorations$webgl$WebGL$depth(1)
+		]));
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$defaultOptions = {preventDefault: true, stopPropagation: false};
+var elm$virtual_dom$VirtualDom$Custom = function (a) {
+	return {$: 'Custom', a: a};
+};
+var elm$html$Html$Events$custom = F2(
+	function (event, decoder) {
+		return A2(
+			elm$virtual_dom$VirtualDom$on,
+			event,
+			elm$virtual_dom$VirtualDom$Custom(decoder));
+	});
+var elm$json$Json$Decode$map6 = _Json_map6;
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$Event = F6(
+	function (keys, button, clientPos, offsetPos, pagePos, screenPos) {
+		return {button: button, clientPos: clientPos, keys: keys, offsetPos: offsetPos, pagePos: pagePos, screenPos: screenPos};
+	});
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$BackButton = {$: 'BackButton'};
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$ErrorButton = {$: 'ErrorButton'};
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$ForwardButton = {$: 'ForwardButton'};
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$MainButton = {$: 'MainButton'};
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$MiddleButton = {$: 'MiddleButton'};
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$SecondButton = {$: 'SecondButton'};
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$buttonFromId = function (id) {
+	switch (id) {
+		case 0:
+			return mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$MainButton;
+		case 1:
+			return mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$MiddleButton;
+		case 2:
+			return mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$SecondButton;
+		case 3:
+			return mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$BackButton;
+		case 4:
+			return mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$ForwardButton;
+		default:
+			return mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$ErrorButton;
 	}
 };
-var timjs$elm_collage$Collage$Render$svgAbsolute = F2(
-	function (_n0, collage) {
-		var width = _n0.a;
-		var height = _n0.b;
-		var w = elm$core$String$fromFloat(width);
-		var h = elm$core$String$fromFloat(height);
-		return A2(
-			elm$html$Html$div,
-			_List_Nil,
-			_List_fromArray(
-				[
-					A2(
-					elm$svg$Svg$svg,
-					_List_fromArray(
-						[
-							elm$svg$Svg$Attributes$width(w),
-							elm$svg$Svg$Attributes$height(h),
-							elm$svg$Svg$Attributes$version('1.1')
-						]),
-					_List_fromArray(
-						[
-							timjs$elm_collage$Collage$Render$render(collage)
-						]))
-				]));
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$buttonDecoder = A2(
+	elm$json$Json$Decode$map,
+	mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$buttonFromId,
+	A2(elm$json$Json$Decode$field, 'button', elm$json$Json$Decode$int));
+var elm$json$Json$Decode$float = _Json_decodeFloat;
+var mpizenberg$elm_pointer_events$Internal$Decode$clientPos = A3(
+	elm$json$Json$Decode$map2,
+	F2(
+		function (a, b) {
+			return _Utils_Tuple2(a, b);
+		}),
+	A2(elm$json$Json$Decode$field, 'clientX', elm$json$Json$Decode$float),
+	A2(elm$json$Json$Decode$field, 'clientY', elm$json$Json$Decode$float));
+var elm$json$Json$Decode$bool = _Json_decodeBool;
+var mpizenberg$elm_pointer_events$Internal$Decode$Keys = F3(
+	function (alt, ctrl, shift) {
+		return {alt: alt, ctrl: ctrl, shift: shift};
 	});
-var timjs$elm_collage$Collage$Render$svg = function (collage) {
-	return A2(
-		timjs$elm_collage$Collage$Render$svgAbsolute,
-		_Utils_Tuple2(
-			timjs$elm_collage$Collage$Layout$width(collage),
-			timjs$elm_collage$Collage$Layout$height(collage)),
-		A2(timjs$elm_collage$Collage$Layout$align, timjs$elm_collage$Collage$Layout$topLeft, collage));
-};
+var mpizenberg$elm_pointer_events$Internal$Decode$keys = A4(
+	elm$json$Json$Decode$map3,
+	mpizenberg$elm_pointer_events$Internal$Decode$Keys,
+	A2(elm$json$Json$Decode$field, 'altKey', elm$json$Json$Decode$bool),
+	A2(elm$json$Json$Decode$field, 'ctrlKey', elm$json$Json$Decode$bool),
+	A2(elm$json$Json$Decode$field, 'shiftKey', elm$json$Json$Decode$bool));
+var mpizenberg$elm_pointer_events$Internal$Decode$offsetPos = A3(
+	elm$json$Json$Decode$map2,
+	F2(
+		function (a, b) {
+			return _Utils_Tuple2(a, b);
+		}),
+	A2(elm$json$Json$Decode$field, 'offsetX', elm$json$Json$Decode$float),
+	A2(elm$json$Json$Decode$field, 'offsetY', elm$json$Json$Decode$float));
+var mpizenberg$elm_pointer_events$Internal$Decode$pagePos = A3(
+	elm$json$Json$Decode$map2,
+	F2(
+		function (a, b) {
+			return _Utils_Tuple2(a, b);
+		}),
+	A2(elm$json$Json$Decode$field, 'pageX', elm$json$Json$Decode$float),
+	A2(elm$json$Json$Decode$field, 'pageY', elm$json$Json$Decode$float));
+var mpizenberg$elm_pointer_events$Internal$Decode$screenPos = A3(
+	elm$json$Json$Decode$map2,
+	F2(
+		function (a, b) {
+			return _Utils_Tuple2(a, b);
+		}),
+	A2(elm$json$Json$Decode$field, 'screenX', elm$json$Json$Decode$float),
+	A2(elm$json$Json$Decode$field, 'screenY', elm$json$Json$Decode$float));
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$eventDecoder = A7(elm$json$Json$Decode$map6, mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$Event, mpizenberg$elm_pointer_events$Internal$Decode$keys, mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$buttonDecoder, mpizenberg$elm_pointer_events$Internal$Decode$clientPos, mpizenberg$elm_pointer_events$Internal$Decode$offsetPos, mpizenberg$elm_pointer_events$Internal$Decode$pagePos, mpizenberg$elm_pointer_events$Internal$Decode$screenPos);
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onWithOptions = F3(
+	function (event, options, tag) {
+		return A2(
+			elm$html$Html$Events$custom,
+			event,
+			A2(
+				elm$json$Json$Decode$map,
+				function (ev) {
+					return {
+						message: tag(ev),
+						preventDefault: options.preventDefault,
+						stopPropagation: options.stopPropagation
+					};
+				},
+				mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$eventDecoder));
+	});
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onDown = A2(mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onWithOptions, 'mousedown', mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$defaultOptions);
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onLeave = A2(mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onWithOptions, 'mouseleave', mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$defaultOptions);
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onMove = A2(mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onWithOptions, 'mousemove', mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$defaultOptions);
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onUp = A2(mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onWithOptions, 'mouseup', mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$defaultOptions);
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$defaultOptions = {preventDefault: true, stopPropagation: false};
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$Event = F3(
+	function (mouseEvent, deltaY, deltaMode) {
+		return {deltaMode: deltaMode, deltaY: deltaY, mouseEvent: mouseEvent};
+	});
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$DeltaLine = {$: 'DeltaLine'};
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$DeltaPage = {$: 'DeltaPage'};
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$DeltaPixel = {$: 'DeltaPixel'};
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$deltaModeDecoder = function () {
+	var intToMode = function (_int) {
+		switch (_int) {
+			case 1:
+				return mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$DeltaLine;
+			case 2:
+				return mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$DeltaPage;
+			default:
+				return mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$DeltaPixel;
+		}
+	};
+	return A2(elm$json$Json$Decode$map, intToMode, elm$json$Json$Decode$int);
+}();
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$eventDecoder = A4(
+	elm$json$Json$Decode$map3,
+	mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$Event,
+	mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$eventDecoder,
+	A2(elm$json$Json$Decode$field, 'deltaY', elm$json$Json$Decode$float),
+	A2(elm$json$Json$Decode$field, 'deltaMode', mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$deltaModeDecoder));
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$onWithOptions = F2(
+	function (options, tag) {
+		return A2(
+			elm$html$Html$Events$custom,
+			'wheel',
+			A2(
+				elm$json$Json$Decode$map,
+				function (ev) {
+					return {
+						message: tag(ev),
+						preventDefault: options.preventDefault,
+						stopPropagation: options.stopPropagation
+					};
+				},
+				mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$eventDecoder));
+	});
+var mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$onWheel = mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$onWithOptions(mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$defaultOptions);
 var author$project$GridEditor$view = function (_n0) {
 	var model = _n0.a;
 	return A2(
-		elm$html$Html$div,
+		elm_explorations$webgl$WebGL$toHtml,
 		_List_fromArray(
 			[
-				elm$html$Html$Attributes$class('grid-editor')
+				elm$html$Html$Attributes$width(
+				elm$core$Basics$round(model.width)),
+				elm$html$Html$Attributes$height(
+				elm$core$Basics$round(model.height)),
+				A2(elm$html$Html$Attributes$style, 'display', 'block'),
+				mpizenberg$elm_pointer_events$Html$Events$Extra$Wheel$onWheel(author$project$GridEditor$scroll),
+				mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onDown(
+				function (event) {
+					return A2(author$project$GridEditor$MouseDown, event.button, event.clientPos);
+				}),
+				mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onUp(
+				function (_n1) {
+					return author$project$GridEditor$MouseUp;
+				}),
+				mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onMove(
+				function (event) {
+					return author$project$GridEditor$MouseMove(event.clientPos);
+				}),
+				mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onLeave(
+				function (_n2) {
+					return author$project$GridEditor$MouseLeave;
+				})
 			]),
 		_List_fromArray(
 			[
-				timjs$elm_collage$Collage$Render$svg(
-				A2(author$project$GridEditor$gridView, model.gradient, model.grid))
+				A4(
+				elm_explorations$webgl$WebGL$entity,
+				author$project$GridEditor$vertexShader,
+				author$project$GridEditor$fragmentShader,
+				A2(author$project$GridEditor$mesh, model.gradient, model.grid),
+				{
+					camera: author$project$GridEditor$cameraFromBounds(
+						A4(author$project$GridEditor$cameraBounds, model.cameraCenter, model.width, model.height, model.zoomStep))
+				})
 			]));
 };
 var author$project$MapEditor$GridEditorMsg = function (a) {
@@ -10365,11 +11238,17 @@ var author$project$MapEditor$view = function (state) {
 		content);
 };
 var elm$browser$Browser$element = _Browser_element;
+var elm$core$Platform$Cmd$batch = _Platform_batch;
+var elm$core$Platform$Cmd$none = elm$core$Platform$Cmd$batch(_List_Nil);
 var elm$json$Json$Decode$andThen = _Json_andThen;
 var elm$json$Json$Decode$index = _Json_decodeIndex;
 var author$project$Main$main = elm$browser$Browser$element(
 	{
-		init: author$project$MapEditor$init,
+		init: function (windowSize) {
+			return _Utils_Tuple2(
+				author$project$MapEditor$init(windowSize),
+				elm$core$Platform$Cmd$none);
+		},
 		subscriptions: author$project$MapEditor$subscriptions,
 		update: F2(
 			function (msg, model) {
