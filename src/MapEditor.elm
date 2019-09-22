@@ -47,7 +47,7 @@ type Dialog
     | GradientEditorDialog DiscreteGradientEditor.State
 
 
-init : ( Int, Int ) -> ( State, Cmd Msg )
+init : ( Int, Int ) -> State
 init ( windowWidth, windowHeight ) =
     let
         defaultMapWidth =
@@ -68,7 +68,7 @@ init ( windowWidth, windowHeight ) =
                 (gridEditorPaneWidth windowWidth)
                 (gridEditorPaneHeight windowHeight)
     in
-    ( { name = "untitled"
+    { name = "untitled"
       , mapWidth = defaultMapWidth
       , mapHeight = defaultMapHeight
       , layerSelection = initLayerSelection
@@ -77,8 +77,6 @@ init ( windowWidth, windowHeight ) =
       , windowWidth = windowWidth
       , windowHeight = windowHeight
       }
-    , Cmd.none
-    )
 
 
 makeGridEditor : Layer -> Int -> Int -> GridEditor.State
