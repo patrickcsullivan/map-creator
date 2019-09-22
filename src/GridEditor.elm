@@ -1,4 +1,15 @@
-module GridEditor exposing (Msg, State, init, update, updateGradient, updateGrid, updatePaneSize, view)
+module GridEditor exposing
+    ( Msg
+    , State
+    , init
+    , update
+    , updateCellMax
+    , updateCellMin
+    , updateGradient
+    , updateGrid
+    , updatePaneSize
+    , view
+    )
 
 import Array exposing (Array)
 import Collage exposing (Collage)
@@ -74,14 +85,40 @@ updatePaneSize paneWidth paneHeight (State model) =
 updateGrid : Grid Int -> State -> State
 updateGrid grid (State model) =
     let
-        g =
+        boundedGrid =
             boundGrid model.cellMin model.cellMax grid
     in
     State
         { model
-            | grid = g
+            | grid = boundedGrid
         }
         |> Debug.log "State"
+
+
+updateCellMin : Int -> State -> State
+updateCellMin cellMin (State model) =
+    let
+        boundedGrid =
+            boundGrid cellMin model.cellMax model.grid
+    in
+    State
+        { model
+            | cellMin = cellMin
+            , grid = boundedGrid
+        }
+
+
+updateCellMax : Int -> State -> State
+updateCellMax cellMax (State model) =
+    let
+        boundedGrid =
+            boundGrid model.cellMin cellMax model.grid
+    in
+    State
+        { model
+            | cellMax = cellMax
+            , grid = boundedGrid
+        }
 
 
 updateGradient : DiscreteGradient -> State -> State

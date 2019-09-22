@@ -7,7 +7,7 @@ import MapEditor exposing (init, subscriptions, update, view)
 main =
     Browser.element
         { init = init
-        , update = update
+        , update = \msg model -> ( update msg model, Cmd.none )
         , subscriptions = subscriptions
         , view = view
         }

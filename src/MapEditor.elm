@@ -12,6 +12,7 @@ import Html.Attributes
 import Html.Events
 import Json.Decode
 import Layer exposing (Layer)
+import LayerSelection exposing (LayerSelection)
 import List.Extra as List
 import Maybe.Extra as Maybe
 
@@ -25,8 +26,8 @@ type alias State =
     { name : String
     , mapWidth : Int
     , mapHeight : Int
-    , layers : List Layer
-    , layerSelection : Maybe LayerSelection
+    , layerSelection : LayerSelection
+    , gridEditor : GridEditor.State
     , dialog : Maybe Dialog
     , windowWidth : Int
     , windowHeight : Int
@@ -41,18 +42,6 @@ type alias State =
 -- If selected layer index exists it must be greater than 0 and less than the number of layers.
 
 
-type alias LayerSelection =
-    { layerIndex : Int
-    , tool : Tool
-    , gridEditor : GridEditor.State
-    }
-
-
-type Tool
-    = Pan
-    | Brush Brush
-
-
 type Dialog
     = NewLayerDialog String
     | GradientEditorDialog DiscreteGradientEditor.State
@@ -60,11 +49,30 @@ type Dialog
 
 init : ( Int, Int ) -> ( State, Cmd Msg )
 init ( windowWidth, windowHeight ) =
+    let
+        defaultMapWidth =
+            20
+
+        defaultMapHeight =
+            20
+
+        initLayer =
+            makeLayerWithDefaultMinMax defaultLayerName defaultMapWidth defaultMapHeight
+
+        initLayerSelection =
+            LayerSelection.singleton <| initLayer
+
+        initGridEditor =
+            makeGridEditor
+                initLayer
+                (gridEditorPaneWidth windowWidth)
+                (gridEditorPaneHeight windowHeight)
+    in
     ( { name = "untitled"
-      , mapWidth = 10
-      , mapHeight = 10
-      , layers = []
-      , layerSelection = Nothing
+      , mapWidth = defaultMapWidth
+      , mapHeight = defaultMapHeight
+      , layerSelection = initLayerSelection
+      , gridEditor = initGridEditor
       , dialog = Nothing
       , windowWidth = windowWidth
       , windowHeight = windowHeight
@@ -73,28 +81,8 @@ init ( windowWidth, windowHeight ) =
     )
 
 
-initLayerSelection : List Layer -> Int -> Int -> Int -> Maybe LayerSelection
-initLayerSelection layers selectedIndex windowWidth windowHeight =
-    List.getAt selectedIndex layers
-        |> Maybe.map
-            (\layer ->
-                { layerIndex = selectedIndex
-
-                -- TODO:
-                -- Don't update tool if selected layer doesn't change.
-                -- Set the same type of tool that was previously in use if layer changes.
-                , tool = Pan
-                , gridEditor =
-                    initGridEditor
-                        layer
-                        (gridEditorPaneWidth windowWidth)
-                        (gridEditorPaneWidth windowHeight)
-                }
-            )
-
-
-initGridEditor : Layer -> Int -> Int -> GridEditor.State
-initGridEditor layer paneWidth paneHeight =
+makeGridEditor : Layer -> Int -> Int -> GridEditor.State
+makeGridEditor layer paneWidth paneHeight =
     GridEditor.init
         (Layer.getGrid layer)
         (Layer.getMin layer)
@@ -102,6 +90,27 @@ initGridEditor layer paneWidth paneHeight =
         (Layer.getColorGradient layer)
         paneWidth
         paneHeight
+
+
+{-| Default name for new layers.
+-}
+defaultLayerName : String
+defaultLayerName =
+    "New Layer"
+
+
+{-| Make a layer with default cell min and max.
+-}
+makeLayerWithDefaultMinMax : String -> Int -> Int -> Layer
+makeLayerWithDefaultMinMax name width height =
+    let
+        defaultCellMin =
+            0
+
+        defaultCellMax =
+            9
+    in
+    Layer.init name width height defaultCellMin defaultCellMax
 
 
 
@@ -114,7 +123,6 @@ type Msg
     | SetMapWidth Int
     | SetMapHeight Int
     | SelectLayer Int
-    | UnselectLayer
     | DeleteSelectedLayer
     | OpenNewLayerDialog
     | SetNewLayerDialogNameField String
@@ -128,37 +136,27 @@ type Msg
     | NoOp
 
 
-update : Msg -> State -> ( State, Cmd Msg )
+update : Msg -> State -> State
 update msg state =
-    ( update_ msg state, Cmd.none )
-
-
-update_ : Msg -> State -> State
-update_ msg state =
     case msg of
         WindowResize width height ->
             { state
                 | windowWidth = width
                 , windowHeight = height
+                , gridEditor =
+                    GridEditor.updatePaneSize
+                        (gridEditorPaneWidth width)
+                        (gridEditorPaneHeight height)
+                        state.gridEditor
             }
-                |> updateGridEditorPaneSize
-                    (gridEditorPaneWidth width)
-                    (gridEditorPaneHeight height)
 
         SetMapWidth w ->
             if w > 0 then
                 { state
                     | mapWidth = w
-                    , layers = List.map (Layer.resizeGrid w state.mapHeight) state.layers
+                    , layerSelection = LayerSelection.map (Layer.resizeGrid w state.mapHeight) state.layerSelection
                 }
-                    -- TODO: Refactor layers and layer selection so this isn't necessary.
-                    |> (\newState ->
-                            { newState
-                                | layerSelection =
-                                    getSelectedLayerIndex state
-                                        |> Maybe.andThen (\i -> initLayerSelection newState.layers i newState.windowWidth newState.windowHeight)
-                            }
-                       )
+                    |> loadSelecteLayerIntoGridEditor
 
             else
                 state
@@ -167,62 +165,89 @@ update_ msg state =
             if h > 0 then
                 { state
                     | mapHeight = h
-                    , layers = List.map (Layer.resizeGrid state.mapWidth h) state.layers
+                    , layerSelection = LayerSelection.map (Layer.resizeGrid state.mapWidth h) state.layerSelection
                 }
-                    -- TODO: Refactor layers and layer selection so this isn't necessary.
-                    |> (\newState ->
-                            { newState
-                                | layerSelection =
-                                    getSelectedLayerIndex state
-                                        |> Maybe.andThen (\i -> initLayerSelection newState.layers i newState.windowWidth newState.windowHeight)
-                            }
-                       )
+                    |> loadSelecteLayerIntoGridEditor
 
             else
                 state
 
         SelectLayer index ->
-            selectLayer index state
-
-        UnselectLayer ->
             { state
-                | layerSelection = Nothing
+                | layerSelection = LayerSelection.select index state.layerSelection
             }
+                |> loadSelecteLayerIntoGridEditor
 
         DeleteSelectedLayer ->
-            deleteSelectedLayer state
+            { state
+                | layerSelection = LayerSelection.deleteSelected state.layerSelection
+            }
+                |> loadSelecteLayerIntoGridEditor
+
+        SetLayerMin newMin ->
+            { state
+                | layerSelection = LayerSelection.mapSelected (Layer.setMin newMin) state.layerSelection
+            }
+                |> loadSelecteLayerIntoGridEditor
+
+        SetLayerMax newMax ->
+            { state
+                | layerSelection = LayerSelection.mapSelected (Layer.setMax newMax) state.layerSelection
+            }
+                |> loadSelecteLayerIntoGridEditor
 
         OpenNewLayerDialog ->
-            openNewLayerDialog state
+            { state
+                | dialog = Just (NewLayerDialog defaultLayerName)
+            }
 
         SetNewLayerDialogNameField layerName ->
-            setNewLayerDialogName layerName state
-
-        NewLayerDialogCancel ->
-            closeDialog state
-
-        NewLayerDialogCreate ->
-            case getDialog state of
-                Just (NewLayerDialog layerName) ->
-                    state
-                        |> createLayer layerName
-                        |> selectLayer (getLayerCount state)
-                        |> closeDialog
+            case state.dialog of
+                Just (NewLayerDialog _) ->
+                    { state
+                        | dialog = Just (NewLayerDialog layerName)
+                    }
 
                 _ ->
                     state
 
-        SetLayerMin newMin ->
-            updateSelectedLayerMin newMin state
+        NewLayerDialogCancel ->
+            { state
+                | dialog = Nothing -- Close dialog.
+            }
 
-        SetLayerMax newMax ->
-            updateSelectedLayerMax newMax state
+        NewLayerDialogCreate ->
+            case state.dialog of
+                Just (NewLayerDialog layerName) ->
+                    { state
+                        | layerSelection =
+                            state.layerSelection
+                                |> LayerSelection.add (makeLayerWithDefaultMinMax layerName state.mapWidth state.mapHeight)
+                                |> LayerSelection.select (LayerSelection.length state.layerSelection)
+                        , dialog = Nothing -- Close dialog.
+                    }
+                        |> loadSelecteLayerIntoGridEditor
+
+                _ ->
+                    state
 
         OpenGradientEditorDialog ->
-            openGradientEditorDialog state
+            let
+                layer =
+                    LayerSelection.selectedLayer state.layerSelection
+
+                editorState =
+                    DiscreteGradientEditor.init
+                        (Layer.getColorGradient layer)
+                        (Layer.getMin layer)
+                        (Layer.getMax layer)
+            in
+            { state
+                | dialog = Just (GradientEditorDialog editorState)
+            }
 
         GradientEditorMsg editorMsg ->
-            case getDialog state of
+            case state.dialog of
                 Just (GradientEditorDialog dialog) ->
                     let
                         ( newDialog, output ) =
@@ -230,31 +255,34 @@ update_ msg state =
                     in
                     case output of
                         DiscreteGradientEditor.EditInProgress ->
-                            updateGradientEditorDialog newDialog state
+                            { state
+                                | dialog = Just (GradientEditorDialog newDialog)
+                            }
 
                         DiscreteGradientEditor.Cancel ->
-                            closeDialog state
+                            { state
+                                | dialog = Nothing -- Close dialog.
+                            }
 
                         DiscreteGradientEditor.Save gradient ->
-                            state
-                                |> updateSelectedLayerColorGradient gradient
-                                |> updateGridEditorGradient gradient
-                                |> closeDialog
+                            { state
+                                | layerSelection = LayerSelection.mapSelected (Layer.setColorGradient gradient) state.layerSelection
+                                , dialog = Nothing -- Close dialog.
+                            }
+                                |> loadSelecteLayerIntoGridEditor
 
                 _ ->
                     state
 
         GridEditorMsg editorMsg ->
-            case getGridEditor state of
-                Just gridEditor ->
-                    let
-                        ( newGridEditor, grid ) =
-                            GridEditor.update editorMsg gridEditor
-                    in
-                    state |> updateSelectedLayerGrid grid
-
-                _ ->
-                    state
+            let
+                ( newGridEditor, grid ) =
+                    GridEditor.update editorMsg state.gridEditor
+            in
+            { state
+                | layerSelection = LayerSelection.mapSelected (Layer.setGrid grid) state.layerSelection
+                , gridEditor = newGridEditor
+            }
 
         NoOp ->
             state
@@ -276,11 +304,8 @@ toSetMapHeight =
 
 
 toSelectLayerMsg : String -> Msg
-toSelectLayerMsg s =
-    s
-        |> String.toInt
-        |> Maybe.map SelectLayer
-        |> Maybe.withDefault UnselectLayer
+toSelectLayerMsg =
+    stringToIntMsgOrNoOp SelectLayer
 
 
 toSetLayerMinMsg : String -> Msg
@@ -301,221 +326,19 @@ stringToIntMsgOrNoOp toMsg s =
         |> Maybe.withDefault NoOp
 
 
-
--- MODAL / DIALOGS
-
-
-getDialog : State -> Maybe Dialog
-getDialog state =
-    state.dialog
-
-
-closeDialog : State -> State
-closeDialog state =
-    { state
-        | dialog = Nothing
-    }
-
-
-openNewLayerDialog : State -> State
-openNewLayerDialog state =
-    { state
-        | dialog = Just (NewLayerDialog "New Layer")
-    }
-
-
-setNewLayerDialogName : String -> State -> State
-setNewLayerDialogName layerName state =
-    case state.dialog of
-        Just (NewLayerDialog _) ->
-            { state
-                | dialog = Just (NewLayerDialog layerName)
-            }
-
-        _ ->
-            state
-
-
-openGradientEditorDialog : State -> State
-openGradientEditorDialog state =
-    case getSelectedLayer state of
-        Just layer ->
-            let
-                editorState =
-                    DiscreteGradientEditor.init
-                        (Layer.getColorGradient layer)
-                        (Layer.getMin layer)
-                        (Layer.getMax layer)
-            in
-            { state
-                | dialog = Just (GradientEditorDialog editorState)
-            }
-
-        _ ->
-            state
-
-
-updateGradientEditorDialog : DiscreteGradientEditor.State -> State -> State
-updateGradientEditorDialog dialog state =
-    case state.dialog of
-        Just (GradientEditorDialog _) ->
-            { state
-                | dialog = Just (GradientEditorDialog dialog)
-            }
-
-        _ ->
-            state
-
-
-
--- LAYERS
-
-
-getLayerCount : State -> Int
-getLayerCount state =
-    state.layers |> List.length
-
-
-getSelectedLayerIndex : State -> Maybe Int
-getSelectedLayerIndex state =
-    state.layerSelection
-        |> Maybe.map (\s -> s.layerIndex)
-
-
-getSelectedLayer : State -> Maybe Layer
-getSelectedLayer state =
-    state
-        |> getSelectedLayerIndex
-        |> Maybe.andThen (flip List.getAt state.layers)
-
-
-deleteSelectedLayer : State -> State
-deleteSelectedLayer state =
-    case getSelectedLayerIndex state of
-        Just index ->
-            { state
-                | layers = remove index state.layers
-                , layerSelection = Nothing
-            }
-
-        _ ->
-            state
-
-
-createLayer : String -> State -> State
-createLayer name state =
+loadSelecteLayerIntoGridEditor : State -> State
+loadSelecteLayerIntoGridEditor state =
     let
-        newLayer =
-            Layer.init name state.mapWidth state.mapHeight 0 0
+        layer =
+            LayerSelection.selectedLayer state.layerSelection
     in
     { state
-        | layers = state.layers ++ [ newLayer ]
-    }
-
-
-selectLayer : Int -> State -> State
-selectLayer index state =
-    { state
-        | layerSelection = initLayerSelection state.layers index state.windowWidth state.windowHeight
-    }
-
-
-updateSelectedLayerMin : Int -> State -> State
-updateSelectedLayerMin =
-    updateSelectedLayer << Layer.setMin
-
-
-updateSelectedLayerMax : Int -> State -> State
-updateSelectedLayerMax =
-    updateSelectedLayer << Layer.setMax
-
-
-updateSelectedLayerColorGradient : DiscreteGradient -> State -> State
-updateSelectedLayerColorGradient =
-    updateSelectedLayer << Layer.setColorGradient
-
-
-updateSelectedLayerGrid : Grid Int -> State -> State
-updateSelectedLayerGrid =
-    updateSelectedLayer << Layer.setGrid
-
-
-
--- TODO:
--- resize : Int -> Int -> State
--- selectBrushTool : State -> State
--- selectPanTool : State -> State
--- stroke stuff
-
-
-updateSelectedLayer : (Layer -> Layer) -> State -> State
-updateSelectedLayer f state =
-    case getSelectedLayerIndex state of
-        Just selectedIndex ->
-            case List.getAt selectedIndex state.layers of
-                Just _ ->
-                    let
-                        updatedLayers =
-                            List.indexedMap
-                                (\i layer ->
-                                    if i == selectedIndex then
-                                        f layer
-
-                                    else
-                                        layer
-                                )
-                                state.layers
-                    in
-                    { state | layers = updatedLayers }
-
-                _ ->
-                    state
-
-        _ ->
-            state
-
-
-
--- TOOL
-
-
-getSelectedTool : State -> Maybe Tool
-getSelectedTool state =
-    state.layerSelection
-        |> Maybe.map (\s -> s.tool)
-
-
-
--- GRID EDITOR
-
-
-getGridEditor : State -> Maybe GridEditor.State
-getGridEditor state =
-    state.layerSelection
-        |> Maybe.map (\s -> s.gridEditor)
-
-
-updateGridEditorPaneSize : Int -> Int -> State -> State
-updateGridEditorPaneSize paneWidth paneHeight =
-    updateGridEditor (GridEditor.updatePaneSize paneWidth paneHeight)
-
-
-updateGridEditorGradient : DiscreteGradient -> State -> State
-updateGridEditorGradient gradient =
-    updateGridEditor (GridEditor.updateGradient gradient)
-
-
-updateGridEditor : (GridEditor.State -> GridEditor.State) -> State -> State
-updateGridEditor f state =
-    { state
-        | layerSelection = state.layerSelection |> Maybe.map (updateGridEditor_ f)
-    }
-
-
-updateGridEditor_ : (GridEditor.State -> GridEditor.State) -> LayerSelection -> LayerSelection
-updateGridEditor_ f selection =
-    { selection
-        | gridEditor = f selection.gridEditor
+        | gridEditor =
+            state.gridEditor
+                |> GridEditor.updateCellMin (Layer.getMin layer)
+                |> GridEditor.updateCellMax (Layer.getMax layer)
+                |> GridEditor.updateGrid (Layer.getGrid layer)
+                |> GridEditor.updateGradient (Layer.getColorGradient layer)
     }
 
 
@@ -529,9 +352,9 @@ view state =
     let
         content =
             [ toolbar state
-            , gridEditorPaneView (getGridEditor state)
+            , gridEditorPaneView state.gridEditor
             ]
-                ++ (dialogView <| getDialog state)
+                ++ dialogView state.dialog
     in
     Html.div [ Html.Attributes.class "page" ]
         content
@@ -604,20 +427,12 @@ gradientEditorDialog state =
 -- GRID EDITOR PANE
 
 
-gridEditorPaneView : Maybe GridEditor.State -> Html Msg
-gridEditorPaneView maybeGridEditor =
-    let
-        content =
-            maybeGridEditor
-                |> Maybe.map GridEditor.view
-                |> Maybe.map (Html.map GridEditorMsg)
-                |> Maybe.toList
-
-        -- layer
-        -- |> Maybe.map GridEditor.view
-    in
+gridEditorPaneView : GridEditor.State -> Html Msg
+gridEditorPaneView gridEditor =
     Html.div [ Html.Attributes.class "grid-editor-pane" ]
-        content
+        [ GridEditor.view gridEditor
+            |> Html.map GridEditorMsg
+        ]
 
 
 
@@ -628,13 +443,10 @@ toolbar : State -> Html Msg
 toolbar state =
     let
         layerIndex =
-            getSelectedLayerIndex state
+            LayerSelection.selectedIndex state.layerSelection
 
         layer =
-            getSelectedLayer state
-
-        tool =
-            getSelectedTool state
+            LayerSelection.selectedLayer state.layerSelection
     in
     Html.div
         [ Html.Attributes.class "toolbar"
@@ -646,7 +458,7 @@ toolbar state =
             ]
         , toolbarSectionHeader "Layer"
         , toolbarSectionContents
-            [ layerField layerIndex state.layers
+            [ layerField layerIndex (LayerSelection.toList state.layerSelection)
             , minMaxField layer
             , colorGradientField layer
             ]
@@ -713,7 +525,7 @@ widthHeightFieldInputSeparator =
 -- LAYER FIELD
 
 
-layerField : Maybe Int -> List Layer -> Html Msg
+layerField : Int -> List Layer -> Html Msg
 layerField selectedIndex layers =
     Html.div
         [ Html.Attributes.class "layer-field"
@@ -724,37 +536,20 @@ layerField selectedIndex layers =
         ]
 
 
-layerFieldSelect : Maybe Int -> List Layer -> Html Msg
+layerFieldSelect : Int -> List Layer -> Html Msg
 layerFieldSelect selectedIndex layers =
-    let
-        emptyOption =
-            layerFieldEmptyOption (Maybe.isNothing selectedIndex)
-
-        options =
-            [ emptyOption ] ++ layerFieldOptions selectedIndex layers
-    in
     Html.select
         [ Html.Attributes.class "layer-field__select"
         , Html.Events.onInput toSelectLayerMsg
         ]
-        options
+        (layerFieldOptions selectedIndex layers)
 
 
-layerFieldEmptyOption : Bool -> Html Msg
-layerFieldEmptyOption isSelected =
-    Html.option
-        [ Html.Attributes.value ""
-        , Html.Attributes.selected isSelected
-        ]
-        [ Html.text ""
-        ]
-
-
-layerFieldOptions : Maybe Int -> List Layer -> List (Html Msg)
+layerFieldOptions : Int -> List Layer -> List (Html Msg)
 layerFieldOptions selectedIndex =
     List.indexedMap
         (\i layer ->
-            layerFieldOption i layer (isJustEqual selectedIndex i)
+            layerFieldOption i layer (i == selectedIndex)
         )
 
 
@@ -782,13 +577,13 @@ layerFieldDeleteButton =
 -- MIN / MAX FIELD
 
 
-minMaxField : Maybe Layer -> Html Msg
+minMaxField : Layer -> Html Msg
 minMaxField layer =
     Html.div [ Html.Attributes.class "min-max-field" ]
         [ minMaxFieldLabel
-        , minInput <| Maybe.map Layer.getMin layer
+        , minInput <| Layer.getMin layer
         , minMaxFieldInputSeparator
-        , maxInput <| Maybe.map Layer.getMax layer
+        , maxInput <| Layer.getMax layer
         ]
 
 
@@ -799,43 +594,23 @@ minMaxFieldLabel =
         ]
 
 
-minInput : Maybe Int -> Html Msg
+minInput : Int -> Html Msg
 minInput val =
-    case val of
-        Just v ->
-            enabledMinMaxFieldInput v toSetLayerMinMsg
-
-        Nothing ->
-            disabledMinMaxFieldInput
+    minMaxFieldInput val toSetLayerMinMsg
 
 
-maxInput : Maybe Int -> Html Msg
+maxInput : Int -> Html Msg
 maxInput val =
-    case val of
-        Just v ->
-            enabledMinMaxFieldInput v toSetLayerMaxMsg
-
-        Nothing ->
-            disabledMinMaxFieldInput
+    minMaxFieldInput val toSetLayerMaxMsg
 
 
-enabledMinMaxFieldInput : Int -> (String -> Msg) -> Html Msg
-enabledMinMaxFieldInput val toMsg =
+minMaxFieldInput : Int -> (String -> Msg) -> Html Msg
+minMaxFieldInput val toMsg =
     Html.input
         [ Html.Attributes.class "min-max-field__input"
         , Html.Attributes.type_ "number"
         , Html.Attributes.value <| String.fromInt val
         , Html.Events.onInput toMsg
-        ]
-        []
-
-
-disabledMinMaxFieldInput : Html Msg
-disabledMinMaxFieldInput =
-    Html.input
-        [ Html.Attributes.class "min-max-field__input"
-        , Html.Attributes.type_ "number"
-        , Html.Attributes.disabled True
         ]
         []
 
@@ -858,7 +633,7 @@ onClick message =
 -- COLOR FIELD
 
 
-colorGradientField : Maybe Layer -> Html Msg
+colorGradientField : Layer -> Html Msg
 colorGradientField layer =
     Html.div [ Html.Attributes.class "color-field" ]
         [ colorFieldLabel
@@ -873,44 +648,24 @@ colorFieldLabel =
         ]
 
 
-colorGradientRow : Maybe Layer -> Html Msg
-colorGradientRow maybeLayer =
-    let
-        contents =
-            case maybeLayer of
-                Just layer ->
-                    [ enabledColorGradient
-                        (Layer.getColorGradient layer)
-                        (Layer.getMin layer)
-                        (Layer.getMax layer)
-                    , colorGradientEditButton False
-                    ]
-
-                Nothing ->
-                    [ disabledColorGradient
-                    , colorGradientEditButton True
-                    ]
-    in
+colorGradientRow : Layer -> Html Msg
+colorGradientRow layer =
     Html.div [ Html.Attributes.class "color-gradient__row" ]
-        contents
+        [ colorGradient
+            (Layer.getColorGradient layer)
+            (Layer.getMin layer)
+            (Layer.getMax layer)
+        , colorGradientEditButton False
+        ]
 
 
-enabledColorGradient : DiscreteGradient -> Int -> Int -> Html Msg
-enabledColorGradient gradient layerMin layerMax =
+colorGradient : DiscreteGradient -> Int -> Int -> Html Msg
+colorGradient gradient layerMin layerMax =
     Html.div
         [ Html.Attributes.class "color-gradient"
         ]
         [ simpleGradient gradient layerMin layerMax
         ]
-
-
-disabledColorGradient : Html Msg
-disabledColorGradient =
-    Html.div
-        [ Html.Attributes.class "color-gradient"
-        , Html.Attributes.class "color-gradient_disabled"
-        ]
-        []
 
 
 colorGradientEditButton : Bool -> Html Msg
@@ -951,6 +706,7 @@ simpleGradientCell gradient val =
 
 --------------------------------------------------------------------------------
 -- LAYOUT CALCULATIONS
+-- TODO: Maybe remove soon
 
 
 toolbarWidth : Int
@@ -966,32 +722,3 @@ gridEditorPaneWidth windowWidth =
 gridEditorPaneHeight : Int -> Int
 gridEditorPaneHeight windowHeight =
     windowHeight
-
-
-
---------------------------------------------------------------------------------
--- HELPERS
-
-
-isJustEqual : Maybe a -> a -> Bool
-isJustEqual maybeX y =
-    case maybeX of
-        Nothing ->
-            False
-
-        Just x ->
-            x == y
-
-
-{-| Remove the element at the given index in the list.
--}
-remove : Int -> List a -> List a
-remove index xs =
-    List.take index xs ++ List.drop (index + 1) xs
-
-
-{-| Flip the function's parameter order.
--}
-flip : (a -> b -> c) -> (b -> a -> c)
-flip f =
-    \b a -> f a b
