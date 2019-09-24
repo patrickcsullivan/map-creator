@@ -25,3 +25,4 @@ main =
 -- > Let user pick file name when saving.
 -- > Brush value should change when changing min or max makes it out of bounds.
 -- > Show border around brush.
+-- > Initial layer state should have a gradient with more than one color stop.
