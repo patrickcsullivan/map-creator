@@ -1,17 +1,12 @@
-module Brush exposing (Brush, Effect, Shape, getMask)
+module Brush exposing (Brush, Shape(..), makeBrush, width)
 
 import Grid exposing (Coordinate, Grid)
 
 
-type Brush
-    = Brush InnerBrush
-
-
-type alias InnerBrush =
-    { shape : Shape
-    , effect : Effect
-    , width : Int
-    , value : Int
+type alias Brush =
+    { mask : Grid Bool
+    , centerOffset : { x : Int, y : Int }
+    , paintValue : Int
     }
 
 
@@ -20,83 +15,65 @@ type Shape
     | Square
 
 
-type Effect
-    = Absolute
-    | Additive
-
-
-{-| Get a mask indicating which coordinates on a canvas the brush is on.
+{-| Create a brush with the given shape, width, and paint value. Note that only brushes with odd widths will have an
+accurate center offset since a brush with an even width does not actually have a true center cell.
 -}
-getMask : Brush -> Coordinate -> Int -> Int -> Grid Bool
-getMask (Brush inner) brushCoord gridWidth gridHeight =
-    case inner.shape of
-        Circle ->
-            circleMask brushCoord inner.width gridWidth gridHeight
+makeBrush : Shape -> Int -> Int -> Brush
+makeBrush shape width_ paintValue =
+    let
+        mask =
+            case shape of
+                Circle ->
+                    circleMask width_
 
-        Square ->
-            squareMask brushCoord inner.width gridWidth gridHeight
-
-
-
--- UNEXPORTED
-
-
-circleMask : Coordinate -> Int -> Int -> Int -> Grid Bool
-circleMask brushCoord brushWidth gridWidth gridHeight =
-    Grid.rectangle
-        gridWidth
-        gridHeight
-        (isInCircleMask brushCoord brushWidth)
+                Square ->
+                    squareMask width_
+    in
+    { mask = mask
+    , centerOffset = { x = width_ // 2, y = width_ // 2 }
+    , paintValue = paintValue
+    }
 
 
-squareMask : Coordinate -> Int -> Int -> Int -> Grid Bool
-squareMask brushCoord brushWidth gridWidth gridHeight =
-    Grid.rectangle
-        gridWidth
-        gridHeight
-        (isInSquareMask brushCoord brushWidth)
-
-
-{-| Check if a cell is in the square mask.
+{-| Get the brush width.
 -}
-isInSquareMask : ( Int, Int ) -> Int -> Int -> Int -> Bool
-isInSquareMask ( maskCenterX, maskCenterY ) maskWidth x y =
-    if isOdd maskWidth then
-        let
-            inMaskX =
-                abs (maskCenterX - x) <= (maskWidth - 1) // 2
-
-            inMaskY =
-                abs (maskCenterY - y) <= (maskWidth - 1) // 2
-        in
-        inMaskX && inMaskY
-
-    else
-        let
-            inMaskX =
-                abs (maskCenterX - x) <= maskWidth // 2
-
-            inMaskY =
-                abs (maskCenterY - y) <= maskWidth // 2
-        in
-        inMaskX && inMaskY
+width : Brush -> Int
+width brush =
+    Grid.width brush.mask
 
 
-{-| Check if a cell is in the circular mask.
+{-| Create a square grid of Boolean values that create a circular mask. Cells containing True are masked cells, and
+cells containing False are unmasked cells.
 -}
-isInCircleMask : ( Int, Int ) -> Int -> Int -> Int -> Bool
-isInCircleMask maskCenter maskWidth x y =
+circleMask : Int -> Grid Bool
+circleMask brushWidth =
+    Grid.square brushWidth (isInCircleMask brushWidth)
+
+
+{-| Create a square grid of Boolean values that create a square mask. All cells contain True, indicating that all cells
+are masked cells.
+-}
+squareMask : Int -> Grid Bool
+squareMask brushWidth =
+    Grid.square brushWidth (\_ _ -> True)
+
+
+{-| Check if a cell is in a circular mask on a square grid. A cell is in the mask if the corner of the cell that is
+closest to the circle center is within the circle.
+-}
+isInCircleMask : Int -> Int -> Int -> Bool
+isInCircleMask maskWidth x y =
     let
         radius =
             toFloat maskWidth / 2.0
 
         centerPoint =
-            cellIndexToCenterPoint maskCenter
+            ( radius, radius )
 
-        closestCornerPoint =
+        closestCornerToCenter =
             closestCorner centerPoint ( x, y )
     in
-    closestCornerPoint
+    closestCornerToCenter
         |> isInCircle centerPoint radius
 
 
@@ -143,21 +120,3 @@ closestCorner ( targetX, targetY ) ( cellX, cellY ) =
                 toFloat (cellY + 1)
     in
     ( x, y )
-
-
-{-| Get the center point for a cell at the given index. Cells are squares with
-a width of 1, and a cell with the index (x, y) has a center at (x+0.5, y+0.5).
--}
-cellIndexToCenterPoint : ( Int, Int ) -> ( Float, Float )
-cellIndexToCenterPoint ( xIndex, yIndex ) =
-    ( toFloat xIndex + 0.5, toFloat yIndex + 0.5 )
-
-
-isEven : Int -> Bool
-isEven x =
-    modBy x 2 == 0
-
-
-isOdd : Int -> Bool
-isOdd =
-    not << isEven

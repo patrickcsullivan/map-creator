@@ -1,6 +1,6 @@
 module Layer exposing
     ( Layer
-    , addColorStop
+    , decoder
     , getColorGradient
     , getGrid
     , getHeight
@@ -9,28 +9,35 @@ module Layer exposing
     , getName
     , getWidth
     , init
-    , removeColorStopAt
     , resizeGrid
     , setAtGridCoordinate
+    , setColorGradient
+    , setGrid
     , setMax
     , setMin
     , setName
+    , toJson
     )
 
 import Color exposing (Color)
-import ColorGradient
+import DiscreteGradient
     exposing
-        ( ColorGradient
-        , ColorStop
+        ( ColorStop
+        , DiscreteGradient
         , addStop
         , getColorAt
         , getStops
         , removeStopAt
         )
 import Grid exposing (Coordinate, Grid)
+import Json.Decode as Decode
+import Json.Encode as Encode
 
 
 
+-- TODO:
+-- Refactor this. Maybe it doesn't need to be a closed type. There are a lot of getters and setters and many setters
+-- aren't being used.
 -- INVARIANTS:
 -- Grid width must be greater than 0.
 -- Grid height must be greater than 0.
@@ -46,25 +53,28 @@ type Layer
 
 type alias InnerLayer =
     { name : String
-    , width : Int
-    , height : Int
-    , min : Int
-    , max : Int
+    , min : Int -- TODO: rename to cellMin
+    , max : Int -- TODO: rename to cellMax
     , grid : Grid Int
-    , colorGradient : ColorGradient
+    , colorGradient : DiscreteGradient -- TODO: rename to gradient
     }
 
 
 init : String -> Int -> Int -> Int -> Int -> Layer
 init name width height minVal maxVal =
+    let
+        positiveWidth =
+            max width 1
+
+        positiveHeight =
+            max height 1
+    in
     Layer
         { name = name
-        , width = max width 1
-        , height = max height 1
         , min = minVal
         , max = maxVal
-        , colorGradient = ColorGradient.init { value = minVal, color = defaultColor }
-        , grid = Grid.repeat width height minVal
+        , colorGradient = DiscreteGradient.init { value = minVal, color = defaultColor }
+        , grid = Grid.repeat positiveWidth positiveHeight minVal
         }
 
 
@@ -85,15 +95,15 @@ getMax (Layer inner) =
 
 getWidth : Layer -> Int
 getWidth (Layer inner) =
-    inner.width
+    Grid.width inner.grid
 
 
 getHeight : Layer -> Int
 getHeight (Layer inner) =
-    inner.height
+    Grid.height inner.grid
 
 
-getColorGradient : Layer -> ColorGradient
+getColorGradient : Layer -> DiscreteGradient
 getColorGradient (Layer inner) =
     inner.colorGradient
 
@@ -132,16 +142,61 @@ setMax newMax (Layer inner) =
         Layer (setIncreasedMax newMax inner)
 
 
+setGrid : Grid Int -> Layer -> Layer
+setGrid grid (Layer inner) =
+    let
+        newGrid =
+            grid
+                -- TODO: Clean up getting grid width and height. (Should maybe use getWidth and getHeight.)
+                |> resizeGrid_ inner.min (Grid.width inner.grid) (Grid.height inner.grid)
+                |> applyFloorToGrid inner.min
+                |> applyCeilingToGrid inner.max
+    in
+    Layer
+        { inner
+            | grid = grid
+        }
+
+
+setColorGradient : DiscreteGradient -> Layer -> Layer
+setColorGradient dg (Layer inner) =
+    let
+        newGradient =
+            dg
+                |> applyFloorToColorStops inner.min
+                |> applyCeilingToColorStops inner.max
+    in
+    Layer
+        { inner
+            | colorGradient = newGradient
+        }
+
+
 resizeGrid : Int -> Int -> Layer -> Layer
 resizeGrid width height (Layer inner) =
-    if width < 1 || height < 1 || (width == inner.width && height == inner.height) then
-        Layer inner
+    Layer
+        { inner
+            | grid = resizeGrid_ inner.min width height inner.grid
+        }
+
+
+resizeGrid_ : Int -> Int -> Int -> Grid Int -> Grid Int
+resizeGrid_ default width height grid =
+    if width < 1 || height < 1 || (width == Grid.width grid) && (height == Grid.height grid) then
+        grid
 
     else
-        Layer
-            { inner
-                | grid = unsafeResizeGrid width height inner.min inner.grid
-            }
+        let
+            filler : Int -> Int -> Int
+            filler x y =
+                case Grid.get ( x, y ) grid of
+                    Just cell ->
+                        cell
+
+                    Nothing ->
+                        default
+        in
+        Grid.rectangle width height filler
 
 
 setAtGridCoordinate : Coordinate -> Int -> Layer -> Layer
@@ -156,48 +211,49 @@ setAtGridCoordinate coord value (Layer inner) =
         Layer inner
 
 
-addColorStop : ColorStop -> Layer -> Layer
-addColorStop stop (Layer inner) =
-    if stop.value >= inner.min && stop.value <= inner.max then
-        Layer
-            { inner
-                | colorGradient = addStop stop inner.colorGradient
-            }
 
-    else
-        Layer inner
+--------------------------------------------------------------------------------
+-- ENCODER / DECODER
 
 
-removeColorStopAt : Int -> Layer -> Layer
-removeColorStopAt value (Layer inner) =
-    Layer
-        { inner
-            | colorGradient = removeStopAt value inner.colorGradient
-        }
+toJson : Layer -> Encode.Value
+toJson (Layer inner) =
+    Encode.object
+        [ ( "name", Encode.string inner.name )
+        , ( "cellMin", Encode.int inner.min )
+        , ( "cellMax", Encode.int inner.max )
+        , ( "grid", Grid.toJson Encode.int inner.grid )
+        , ( "gradient", DiscreteGradient.toJson inner.colorGradient )
+        ]
+
+
+decoder : Decode.Decoder Layer
+decoder =
+    Decode.map5
+        (\name cellMin cellMax grid gradient ->
+            Layer
+                { name = name
+                , min = cellMin
+                , max = cellMax
+                , grid = grid
+                , colorGradient = gradient
+                }
+        )
+        (Decode.field "name" Decode.string)
+        (Decode.field "cellMin" Decode.int)
+        (Decode.field "cellMax" Decode.int)
+        (Decode.field "grid" <| Grid.decoder Decode.int)
+        (Decode.field "gradient" DiscreteGradient.decoder)
 
 
 
--- UNEXPOSED
+--------------------------------------------------------------------------------
+-- HELPERS
 
 
 defaultColor : Color
 defaultColor =
-    Color.lightGray
-
-
-unsafeResizeGrid : Int -> Int -> a -> Grid a -> Grid a
-unsafeResizeGrid width height default grid =
-    let
-        filler : Int -> Int -> a
-        filler x y =
-            case Grid.get ( x, y ) grid of
-                Just cell ->
-                    cell
-
-                Nothing ->
-                    default
-    in
-    Grid.rectangle width height filler
+    Color.rgb255 226 192 141
 
 
 setDecreasedMin : Int -> InnerLayer -> InnerLayer
@@ -231,7 +287,7 @@ setDecreasedMax newMax inner =
 {-| Remove all color stops with values below the floor and create a color stop
 at the floor so that gradient colors above the floor are preserved.
 -}
-applyFloorToColorStops : Int -> ColorGradient -> ColorGradient
+applyFloorToColorStops : Int -> DiscreteGradient -> DiscreteGradient
 applyFloorToColorStops flr gradient =
     let
         colorAtFloor =
@@ -248,7 +304,7 @@ applyFloorToColorStops flr gradient =
 {-| Remove all color stops with values above the ceiling and create a color stop
 at the ceiling so that gradient colors below the ceiling are preserved.
 -}
-applyCeilingToColorStops : Int -> ColorGradient -> ColorGradient
+applyCeilingToColorStops : Int -> DiscreteGradient -> DiscreteGradient
 applyCeilingToColorStops ceil gradient =
     let
         colorAtCeiling =
@@ -264,7 +320,7 @@ applyCeilingToColorStops ceil gradient =
 
 {-| Remove the color stops from gradient.
 -}
-removeColorStops : List ColorStop -> ColorGradient -> ColorGradient
+removeColorStops : List ColorStop -> DiscreteGradient -> DiscreteGradient
 removeColorStops stops gradient =
     stops
         -- Map to list of stop values.

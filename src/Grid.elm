@@ -3,11 +3,11 @@ module Grid exposing
     , rectangle, square, repeat, repeatSquare
     , set, get, row, column
     , toColumn, toRow, toCoordinate
-    , height, map, width
+    , decoder, height, map, mapWithCoordinate, toJson, toListWithCoordinates, width
     )
 
 {-| Copied from <https://github.com/jreut/elm-grid/blob/1.0.2/src/Grid.elm> with
-some small changes to be compatible with Elm 0.19.
+some small changes and additions
 
 This library provides a data type to represent two-dimensional arrays.
 
@@ -34,6 +34,8 @@ This library provides a data type to represent two-dimensional arrays.
 -}
 
 import Array exposing (Array)
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Maybe exposing (andThen)
 import Maybe.Extra exposing (combine)
 
@@ -195,3 +197,22 @@ mapWithCoordinate f grid =
     Array.indexedMap
         (\y -> Array.indexedMap (\x -> f (coordinate x y)))
         grid
+
+
+toListWithCoordinates : Grid a -> List ( ( Int, Int ), a )
+toListWithCoordinates grid =
+    grid
+        |> mapWithCoordinate (\coord cell -> ( coord, cell ))
+        |> Array.map Array.toList
+        |> Array.toList
+        |> List.concat
+
+
+toJson : (a -> Encode.Value) -> Grid a -> Encode.Value
+toJson encodeCell =
+    Encode.array (Encode.array encodeCell)
+
+
+decoder : Decode.Decoder a -> Decode.Decoder (Grid a)
+decoder cellDecoder =
+    Decode.array (Decode.array cellDecoder)

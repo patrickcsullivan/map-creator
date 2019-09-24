@@ -1,62 +1,27 @@
 module Main exposing (main)
 
 import Browser
-import Dict exposing (Dict)
-import Html exposing (Html, button, div, text)
-import Html.Attributes exposing (class)
-import Html.Events exposing (onClick)
-import Model exposing (Model)
+import MapEditor exposing (init, subscriptions, update, view)
 
 
 main =
-    Browser.sandbox
-        { init = Model.init
+    Browser.element
+        { init = \windowSize -> ( init windowSize, Cmd.none )
         , update = update
+        , subscriptions = subscriptions
         , view = view
         }
 
 
 
--- UPDATE
-
-
-type Msg
-    = NoOp
-
-
-update : Msg -> Model -> Model
-update msg model =
-    case msg of
-        NoOp ->
-            model
-
-
-
--- VIEW
-
-
-view : Model -> Html Msg
-view model =
-    div []
-        [ toolbar model
-        ]
-
-
-toolbar : Model -> Html Msg
-toolbar model =
-    div [ class "toolbar" ]
-        [ toolbarSectionHeader "Layers"
-        ]
-
-
-toolbarRow : List (Html Msg) -> Html Msg
-toolbarRow contents =
-    div [ class "toolbar__row" ]
-        contents
-
-
-toolbarSectionHeader : String -> Html Msg
-toolbarSectionHeader header =
-    div [ class "toolbar__section-header" ]
-        [ text header
-        ]
+-- TODO:
+-- > Validate decoded models.
+-- > Create sliders for brush width and brush value.
+-- > Improve gradient editor dialog.
+-- > Polish UI.
+-- > Replace download feature with a "save as" feature.
+-- > Embed into desktop application and move save and open buttons into top toolbar.
+-- > Load file name into state.
+-- > Let user pick file name when saving.
+-- > Brush value should change when changing min or max makes it out of bounds.
+-- > Show border around brush.
