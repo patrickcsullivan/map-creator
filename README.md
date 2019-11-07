@@ -7,6 +7,7 @@ A map consists of multiple layers. Each layer is a grid, and all layers have the
 You can paint values onto the map by clicking and dragging on it. Maps can be saved and loaded as JSON.
 
 ![painting](https://raw.githubusercontent.com/patrickcsullivan/map-creator/view/doc/painting.gif "painting")
+_Painting values onto a layer_
 
 ![editing a gradient](https://raw.githubusercontent.com/patrickcsullivan/map-creator/view/doc/gradient.gif "editing a gradient")
-
+_Editing a layer's gradient_
