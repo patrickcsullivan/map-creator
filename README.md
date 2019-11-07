@@ -11,3 +11,7 @@ _Painting values onto a layer_
 
 ![editing a gradient](https://raw.githubusercontent.com/patrickcsullivan/map-creator/view/doc/gradient.gif "editing a gradient")
 _Editing a layer's gradient_
+
+## Running
+
+To run, clone this repo and run `make` from the repo's root. Open the generated main.html file in a web browser.
