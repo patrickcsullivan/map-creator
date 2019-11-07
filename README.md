@@ -14,4 +14,4 @@ _Editing a layer's gradient_
 
 ## Running
 
-To run, clone this repo and run `make` from the repo's root. Open the generated main.html file in a web browser.
+To run clone this repo and run `make` from the repo's root. Open the generated main.html file in a web browser.
